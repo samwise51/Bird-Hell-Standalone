@@ -1,4 +1,5 @@
 using BirdHell.World;
+using BirdHell.World.Geometry;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -9,11 +10,16 @@ public sealed class BirdHellGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
     private readonly CaveGenerator _caveGenerator = new();
-    private SpriteBatch? _spriteBatch;
-    private Texture2D? _pixel;
+    private readonly CaveGeometryBuilder _geometryBuilder = new();
+    private BasicEffect? _effect;
     private CaveMap? _caveMap;
+    private CaveGeometry? _geometry;
+    private VertexPositionColor[] _terrainVertices = [];
+    private int[] _triangleIndices = [];
+    private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
     private string _currentSeed = string.Empty;
+    private bool _showOutlines;
 
     public BirdHellGame()
     {
@@ -38,9 +44,14 @@ public sealed class BirdHellGame : Game
 
     protected override void LoadContent()
     {
-        _spriteBatch = new SpriteBatch(GraphicsDevice);
-        _pixel = new Texture2D(GraphicsDevice, 1, 1);
-        _pixel.SetData([Color.White]);
+        _effect = new BasicEffect(GraphicsDevice)
+        {
+            VertexColorEnabled = true,
+            LightingEnabled = false,
+            TextureEnabled = false,
+            World = Matrix.Identity,
+            View = Matrix.Identity,
+        };
     }
 
     protected override void Update(GameTime gameTime)
@@ -49,6 +60,11 @@ public sealed class BirdHellGame : Game
         if (keyboardState.IsKeyDown(Keys.Escape)) Exit();
         if (WasPressed(keyboardState, Keys.R)) GenerateNewCave();
         else if (WasPressed(keyboardState, Keys.Space)) GenerateCave(_currentSeed);
+        if (WasPressed(keyboardState, Keys.O))
+        {
+            _showOutlines = !_showOutlines;
+            UpdateWindowTitle();
+        }
         _previousKeyboardState = keyboardState;
         base.Update(gameTime);
     }
@@ -56,15 +72,13 @@ public sealed class BirdHellGame : Game
     protected override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(new Color(10, 12, 16));
-        if (_caveMap is not null && _spriteBatch is not null && _pixel is not null)
-            DrawCave(_caveMap, _spriteBatch, _pixel);
+        if (_geometry is not null && _effect is not null) DrawCaveGeometry(_geometry, _effect);
         base.Draw(gameTime);
     }
 
     protected override void UnloadContent()
     {
-        _pixel?.Dispose();
-        _spriteBatch?.Dispose();
+        _effect?.Dispose();
     }
 
     private bool WasPressed(KeyboardState currentState, Keys key) =>
@@ -76,28 +90,71 @@ public sealed class BirdHellGame : Game
     {
         _currentSeed = seed;
         _caveMap = _caveGenerator.Generate(seed);
-        Window.Title = $"Bird Hell Standalone - Seed: {_currentSeed}";
+        _geometry = _geometryBuilder.Build(_caveMap);
+        BuildRenderData(_geometry);
+        UpdateWindowTitle();
     }
 
-    private void DrawCave(CaveMap map, SpriteBatch spriteBatch, Texture2D pixel)
+    private void BuildRenderData(CaveGeometry geometry)
     {
-        const int padding = 16;
-        var viewport = GraphicsDevice.Viewport;
-        var tileSize = Math.Max(1, Math.Min(
-            (viewport.Width - (padding * 2)) / map.Width,
-            (viewport.Height - (padding * 2)) / map.Height));
-        var offsetX = (viewport.Width - (map.Width * tileSize)) / 2;
-        var offsetY = (viewport.Height - (map.Height * tileSize)) / 2;
-        var wallColor = new Color(34, 40, 49);
-        var openColor = new Color(218, 209, 176);
+        var terrainColor = new Color(218, 209, 176);
+        _terrainVertices = geometry.Vertices
+            .Select(vertex => new VertexPositionColor(new Vector3(vertex.X, vertex.Y, 0f), terrainColor))
+            .ToArray();
+        _triangleIndices = geometry.Triangles
+            .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C })
+            .ToArray();
 
-        spriteBatch.Begin(samplerState: SamplerState.PointClamp);
-        for (var x = 0; x < map.Width; x++)
-        for (var y = 0; y < map.Height; y++)
-        {
-            var destination = new Rectangle(offsetX + (x * tileSize), offsetY + (y * tileSize), tileSize, tileSize);
-            spriteBatch.Draw(pixel, destination, map[x, y] == CaveTile.Wall ? wallColor : openColor);
-        }
-        spriteBatch.End();
+        var outlineColor = new Color(255, 54, 149);
+        var lineVertices = new List<VertexPositionColor>();
+        foreach (var outline in geometry.Outlines)
+            for (var i = 0; i < outline.Points.Count - 1; i++)
+            {
+                var first = outline.Points[i];
+                var second = outline.Points[i + 1];
+                lineVertices.Add(new VertexPositionColor(new Vector3(first.X, first.Y, -0.1f), outlineColor));
+                lineVertices.Add(new VertexPositionColor(new Vector3(second.X, second.Y, -0.1f), outlineColor));
+            }
+        _outlineVertices = lineVertices.ToArray();
     }
+
+    private void DrawCaveGeometry(CaveGeometry geometry, BasicEffect effect)
+    {
+        var viewport = GraphicsDevice.Viewport;
+        const float paddingScale = 1.05f;
+        var geometryWidth = geometry.MaxX - geometry.MinX;
+        var geometryHeight = geometry.MaxY - geometry.MinY;
+        var viewportAspect = viewport.Width / (float)viewport.Height;
+        var halfWidth = geometryWidth * paddingScale / 2f;
+        var halfHeight = geometryHeight * paddingScale / 2f;
+        if (geometryWidth / geometryHeight > viewportAspect) halfHeight = halfWidth / viewportAspect;
+        else halfWidth = halfHeight * viewportAspect;
+
+        effect.Projection = Matrix.CreateOrthographicOffCenter(-halfWidth, halfWidth, -halfHeight, halfHeight, 0f, 1f);
+        GraphicsDevice.BlendState = BlendState.Opaque;
+        GraphicsDevice.DepthStencilState = DepthStencilState.None;
+        GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+        foreach (var pass in effect.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            if (_triangleIndices.Length > 0)
+                GraphicsDevice.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList,
+                    _terrainVertices,
+                    0,
+                    _terrainVertices.Length,
+                    _triangleIndices,
+                    0,
+                    _triangleIndices.Length / 3);
+            if (_showOutlines && _outlineVertices.Length > 0)
+                GraphicsDevice.DrawUserPrimitives(
+                    PrimitiveType.LineList,
+                    _outlineVertices,
+                    0,
+                    _outlineVertices.Length / 2);
+        }
+    }
+
+    private void UpdateWindowTitle() =>
+        Window.Title = $"Bird Hell Standalone - Seed: {_currentSeed} - Outlines: {(_showOutlines ? "On" : "Off")}";
 }
