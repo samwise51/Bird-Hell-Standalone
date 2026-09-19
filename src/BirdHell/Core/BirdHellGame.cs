@@ -11,28 +11,14 @@ namespace BirdHell.Core;
 public sealed class BirdHellGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
-    private readonly CaveGenerator _caveGenerator = new();
-    private readonly CaveGeometryBuilder _geometryBuilder = new();
-    private readonly WeaponSystem _weaponSystem = new();
-    private readonly WeaponState _weaponState = new();
     private BasicEffect? _effect;
-    private CaveMap? _caveMap;
-    private CaveGeometry? _geometry;
-    private Player? _player;
-    private TerrainCollisionSystem? _terrainCollision;
-    private PlayerMovementSystem? _playerMovement;
-    private ProjectileSystem? _projectileSystem;
-    private NavigationGrid? _navigationGrid;
-    private EnemyNavigationSystem? _enemyNavigation;
-    private readonly EnemyCombatSystem _enemyCombat = new();
-    private readonly EnemyPopulation _enemyPopulation = new();
+    private MainScreenRun? _run;
     private VertexPositionColor[] _terrainVertices = [];
     private int[] _triangleIndices = [];
     private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
     private MouseState _previousMouseState;
     private GamePadState _previousGamePadState;
-    private string _currentSeed = string.Empty;
     private bool _showOutlines;
     private bool _showCollisionDebug;
     private bool _showNavigationDebug;
@@ -64,7 +50,8 @@ public sealed class BirdHellGame : Game
     protected override void Initialize()
     {
         _graphics.ApplyChanges();
-        GenerateNewCave();
+        _run = new MainScreenRun(CaveGenerator.CreateRandomSeed());
+        CompleteHostReset();
         _previousKeyboardState = Keyboard.GetState();
         _previousMouseState = Mouse.GetState();
         _previousGamePadState = GamePad.GetState(PlayerIndex.One);
@@ -89,8 +76,19 @@ public sealed class BirdHellGame : Game
         var mouseState = Mouse.GetState();
         var gamePadState = GamePad.GetState(PlayerIndex.One);
         if (keyboardState.IsKeyDown(Keys.Escape)) Exit();
-        if (WasPressed(keyboardState, Keys.R)) GenerateNewCave();
-        else if (WasPressed(keyboardState, Keys.F5)) GenerateCave(_currentSeed);
+        var resetThisFrame = false;
+        if (WasPressed(keyboardState, Keys.R))
+        {
+            _run?.StartNewRun();
+            CompleteHostReset();
+            resetThisFrame = true;
+        }
+        else if (WasPressed(keyboardState, Keys.F5))
+        {
+            _run?.RestartSameSeed();
+            CompleteHostReset();
+            resetThisFrame = true;
+        }
         if (WasPressed(keyboardState, Keys.O))
         {
             _showOutlines = !_showOutlines;
@@ -107,18 +105,23 @@ public sealed class BirdHellGame : Game
             UpdateWindowTitle();
         }
 
-        _pendingJump |= WasPressed(keyboardState, Keys.Space);
-        _pendingFire |= WasPressed(keyboardState, Keys.LeftControl) ||
-                        mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released ||
-                        gamePadState.IsButtonDown(Buttons.A) && _previousGamePadState.IsButtonUp(Buttons.A);
-        _simulationAccumulator += Math.Min(gameTime.ElapsedGameTime.TotalSeconds, MaximumFrameTime);
-        while (_simulationAccumulator >= SimulationStep)
+        if (!resetThisFrame)
         {
-            SimulatePlayer(keyboardState);
-            SimulateCombat();
-            _pendingJump = false;
-            _pendingFire = false;
-            _simulationAccumulator -= SimulationStep;
+            _pendingJump |= WasPressed(keyboardState, Keys.Space);
+            _pendingFire |= WasPressed(keyboardState, Keys.LeftControl) ||
+                            mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released ||
+                            gamePadState.IsButtonDown(Buttons.A) && _previousGamePadState.IsButtonUp(Buttons.A);
+        }
+        if (!resetThisFrame)
+        {
+            _simulationAccumulator += Math.Min(gameTime.ElapsedGameTime.TotalSeconds, MaximumFrameTime);
+            while (_simulationAccumulator >= SimulationStep)
+            {
+                Simulate(keyboardState);
+                _pendingJump = false;
+                _pendingFire = false;
+                _simulationAccumulator -= SimulationStep;
+            }
         }
         _previousKeyboardState = keyboardState;
         _previousMouseState = mouseState;
@@ -129,11 +132,11 @@ public sealed class BirdHellGame : Game
     protected override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(new Color(10, 12, 16));
-        if (_geometry is not null && _effect is not null)
+        if (_run is not null && _effect is not null)
         {
-            ConfigureCamera(_geometry, _effect);
+            ConfigureCamera(_run.Geometry, _effect);
             DrawCaveGeometry(_effect);
-            if (_player is not null) DrawPlayer(_player, _effect);
+            DrawPlayer(_run.Player, _effect);
             DrawEnemies(_effect);
             DrawCombatDebug(_effect);
             if (_showNavigationDebug) DrawNavigationDebug(_effect);
@@ -149,30 +152,14 @@ public sealed class BirdHellGame : Game
     private bool WasPressed(KeyboardState currentState, Keys key) =>
         currentState.IsKeyDown(key) && _previousKeyboardState.IsKeyUp(key);
 
-    private void GenerateNewCave() => GenerateCave(CaveGenerator.CreateRandomSeed());
-
-    private void GenerateCave(string seed)
+    private void CompleteHostReset()
     {
-        _currentSeed = seed;
-        _caveMap = _caveGenerator.Generate(seed);
-        _geometry = _geometryBuilder.Build(_caveMap);
-        _terrainCollision = new TerrainCollisionSystem(_geometry);
-        _playerMovement = new PlayerMovementSystem(_terrainCollision);
-        _projectileSystem = new ProjectileSystem(_terrainCollision);
-        var spawn = PlayerSpawnSystem.FindSafeSpawn(_geometry, PlayerCollider.Original);
-        if (_player is null) _player = new Player(spawn);
-        else _player.Reset(spawn);
-        _terrainCollision.RefreshContacts(_player);
-        _navigationGrid = new NavigationGrid(_geometry);
-        _enemyPopulation.Reset([]);
-        _enemyPopulation.Reset(EnemySpawnSystem.Spawn(_geometry, _navigationGrid, _terrainCollision, seed));
-        _enemyNavigation = new EnemyNavigationSystem(new AStarPathfinder(_navigationGrid), _terrainCollision);
+        if (_run is null) return;
         _simulationAccumulator = 0d;
         _pendingJump = false;
         _pendingFire = false;
-        _weaponState.Reset();
-        _cameraX = _player.Position.X;
-        BuildRenderData(_geometry);
+        _cameraX = _run.Player.Position.X;
+        BuildRenderData(_run.Geometry);
         UpdateWindowTitle();
     }
 
@@ -207,7 +194,7 @@ public sealed class BirdHellGame : Game
         var viewportAspect = viewport.Width / (float)viewport.Height;
         var halfHeight = geometryHeight * paddingScale / 2f;
         var halfWidth = halfHeight * viewportAspect;
-        var targetX = _player?.Position.X ?? 0f;
+        var targetX = _run?.Player.Position.X ?? 0f;
         var minimumCameraX = geometry.MinX + halfWidth;
         var maximumCameraX = geometry.MaxX - halfWidth;
         _cameraX = minimumCameraX <= maximumCameraX
@@ -317,35 +304,26 @@ public sealed class BirdHellGame : Game
         }
     }
 
-    private void SimulatePlayer(KeyboardState keyboardState)
+    private void Simulate(KeyboardState keyboardState)
     {
-        if (_player is null || _playerMovement is null) return;
+        if (_run is null) return;
         var horizontal = 0f;
         if (keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left)) horizontal -= 1f;
         if (keyboardState.IsKeyDown(Keys.D) || keyboardState.IsKeyDown(Keys.Right)) horizontal += 1f;
-        _playerMovement.Step(
-            _player,
+        _run.Step(
             new PlayerInput(horizontal, _pendingJump, keyboardState.IsKeyDown(Keys.Space)),
+            _pendingFire,
             SimulationStep);
-    }
-
-    private void SimulateCombat()
-    {
-        if (_player is null || _projectileSystem is null) return;
-        var projectile = _weaponSystem.Fire(_weaponState, _player, _pendingFire);
-        if (projectile is not null) _projectileSystem.Spawn(projectile);
-        _projectileSystem.Step(SimulationStep, _enemyPopulation.CreateProjectileTargets());
-        _enemyNavigation?.Step(_enemyPopulation.Enemies, _player.Position, SimulationStep);
-        _enemyCombat.Step(_enemyPopulation.Enemies, _player, SimulationStep);
-        if (_displayedHealth != _player.Health || _displayedEnemyCount != _enemyPopulation.LivingCount ||
-            _displayedAllEnemiesDead != _enemyPopulation.AllEnemiesDead)
+        if (_displayedHealth != _run.Player.Health || _displayedEnemyCount != _run.Enemies.LivingCount ||
+            _displayedAllEnemiesDead != _run.Enemies.AllEnemiesDead)
             UpdateWindowTitle();
     }
 
     private void DrawEnemies(BasicEffect effect)
     {
         const int steps = 16;
-        foreach (var enemy in _enemyPopulation.LivingEnemies)
+        if (_run is null) return;
+        foreach (var enemy in _run.Enemies.LivingEnemies)
         {
             var center = enemy.ColliderCenter;
             var color = enemy.DamageFlashTime > 0f ? Color.White : new Color(255, 104, 64);
@@ -377,20 +355,21 @@ public sealed class BirdHellGame : Game
 
     private void DrawNavigationDebug(BasicEffect effect)
     {
-        if (_navigationGrid is null) return;
+        if (_run is null) return;
+        var navigationGrid = _run.NavigationGrid;
         var lines = new List<VertexPositionColor>();
         var blockedColor = new Color(170, 40, 210, 110);
-        for (var y = 0; y < _navigationGrid.Height; y += 2)
-        for (var x = 0; x < _navigationGrid.Width; x += 2)
+        for (var y = 0; y < navigationGrid.Height; y += 2)
+        for (var x = 0; x < navigationGrid.Width; x += 2)
         {
             var cell = new NavigationCell(x, y);
-            if (_navigationGrid.IsWalkable(cell)) continue;
-            var center = _navigationGrid.CellToWorld(cell);
+            if (navigationGrid.IsWalkable(cell)) continue;
+            var center = navigationGrid.CellToWorld(cell);
             lines.Add(new VertexPositionColor(new Vector3(center.X - 0.18f, center.Y, -0.45f), blockedColor));
             lines.Add(new VertexPositionColor(new Vector3(center.X + 0.18f, center.Y, -0.45f), blockedColor));
         }
 
-        var selected = _enemyPopulation.LivingEnemies.FirstOrDefault();
+        var selected = _run.Enemies.LivingEnemies.FirstOrDefault();
         if (selected is not null)
         {
             for (var index = Math.Max(0, selected.PathIndex - 1); index < selected.Path.Count - 1; index++)
@@ -414,20 +393,24 @@ public sealed class BirdHellGame : Game
 
     private void DrawCombatDebug(BasicEffect effect)
     {
-        if (_player is null || _projectileSystem is null) return;
-        var direction = _weaponSystem.GetAimDirection(_player);
-        var muzzle = _weaponSystem.GetMuzzlePosition(_player);
-        var aimEnd = muzzle + direction * 1.5f;
-        var aimVertices = new[]
+        if (_run is null) return;
+        VertexPositionColor[] aimVertices = [];
+        if (_showCollisionDebug)
         {
-            new VertexPositionColor(new Vector3(muzzle.X, muzzle.Y, -0.35f), new Color(255, 196, 64)),
-            new VertexPositionColor(new Vector3(aimEnd.X, aimEnd.Y, -0.35f), new Color(255, 196, 64)),
-        };
+            var direction = _run.GetAimDirection();
+            var muzzle = _run.GetMuzzlePosition();
+            var aimEnd = muzzle + direction * 1.5f;
+            aimVertices =
+            [
+                new VertexPositionColor(new Vector3(muzzle.X, muzzle.Y, -0.35f), new Color(255, 196, 64)),
+                new VertexPositionColor(new Vector3(aimEnd.X, aimEnd.Y, -0.35f), new Color(255, 196, 64)),
+            ];
+        }
 
         var projectileVertices = new List<VertexPositionColor>();
         var projectileIndices = new List<int>();
         const float debugRadius = 0.12f;
-        foreach (var projectile in _projectileSystem.Projectiles)
+        foreach (var projectile in _run.Projectiles.Projectiles)
         {
             var center = projectile.ColliderCenter;
             var start = projectileVertices.Count;
@@ -441,7 +424,8 @@ public sealed class BirdHellGame : Game
         foreach (var pass in effect.CurrentTechnique.Passes)
         {
             pass.Apply();
-            GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, aimVertices, 0, 1);
+            if (aimVertices.Length > 0)
+                GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, aimVertices, 0, 1);
             if (projectileIndices.Count > 0)
                 GraphicsDevice.DrawUserIndexedPrimitives(
                     PrimitiveType.TriangleList,
@@ -456,11 +440,17 @@ public sealed class BirdHellGame : Game
 
     private void UpdateWindowTitle()
     {
-        _displayedHealth = _player?.Health ?? 0;
-        _displayedEnemyCount = _enemyPopulation.LivingCount;
-        _displayedAllEnemiesDead = _enemyPopulation.AllEnemiesDead;
-        var state = _displayedAllEnemiesDead ? " - ALL BIRDS DEAD" : _player is { IsAlive: false } ? " - PLAYER DEAD" : string.Empty;
+        if (_run is null) return;
+        _displayedHealth = _run.Player.Health;
+        _displayedEnemyCount = _run.Enemies.LivingCount;
+        _displayedAllEnemiesDead = _run.Enemies.AllEnemiesDead;
+        var state = _run.State switch
+        {
+            RunState.PlayerDead => " - PLAYER DEAD",
+            RunState.AllBirdsDead => " - ALL BIRDS DEAD",
+            _ => " - PLAYING",
+        };
         Window.Title = $"Bird Hell - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state} - " +
-                       $"A/D move, SPACE jump, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, ESC exit - Seed: {_currentSeed}";
+                       $"A/D move, SPACE jump, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, ESC exit - Seed: {_run.Seed}";
     }
 }

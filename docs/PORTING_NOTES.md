@@ -172,7 +172,7 @@ Callback ordering for exactly simultaneous trigger contacts is Unity/Box2D-speci
 - `Systems/WeaponSystem.cs` owns the serialized muzzle/projectile configuration and creates one projectile for each supplied Fire1 edge. It derives horizontal aim solely from `Player.FacingDirection`.
 - `Systems/ProjectileSystem.cs` owns live projectiles, fixed-step motion, terrain impact removal, lifetime handling when explicitly configured, and nearest-hit damage dispatch through the minimal `IDamageable`/`ProjectileTarget` abstraction. Milestone 5 supplies living enemy circle targets through that same abstraction.
 - `Systems/TerrainCollisionSystem.TrySweepCircle` continuously sweeps the projectile circle against the exact line segments derived from `CaveGeometry.Outlines`. It checks the segment strip and both endpoint caps, so a projectile cannot tunnel through ordinary outline terrain at expected or test-elevated speeds. It never consults `CaveMap` cells.
-- `Core/BirdHellGame.cs` queues Left Ctrl, left-mouse, and controller-A press edges into the existing 50 Hz simulation, resets combat on cave regeneration, and draws temporary yellow projectile diamonds plus a horizontal aim line. Rendering does not own or advance simulation state.
+- `Core/BirdHellGame.cs` queues Left Ctrl, left-mouse, and controller-A press edges into the existing 50 Hz simulation, resets combat on cave regeneration, and draws temporary yellow projectile diamonds. Its horizontal muzzle/facing aim line is shown only with the existing `C` player collision/facing debug view. Rendering does not own or advance simulation state.
 
 Equivalent input and cave geometry produce deterministic projectile state. Facing is now explicit player simulation state and resets to the MainScreen serialized value `+1` on respawn. There is no fire cooldown to count down and ammunition is unlimited, matching the source. Production projectile lifetime remains `null`; optional lifetime support exists for later serialized variants and is deterministically checked but is not enabled as a Bird Hell mechanic.
 
@@ -221,3 +221,37 @@ Temporary orange primitives distinguish enemies from the cyan player. White flas
 ### Deferred enemy functionality
 
 Final bird/player artwork, animator coupling, audio, hit/death particle prefabs, UI screens, health bars, cleared-screen/next-level/win transitions, mobile controls, enemy projectiles, attacks beyond contact, and sophisticated RVO/flocking remain deferred. `AllEnemiesDead` is state/debug feedback only.
+
+## Procedural MainScreen lifecycle and atomic reset
+
+### Audited active loop
+
+The checked-in Unity build has one enabled gameplay scene, `MainScreen`. Its active loop is: generate a random procedural cave, position the existing player, spawn 15 enemies, and play. Enemy death removes that enemy; the final death only logs `All Birds Dead`. Player health starts at 100, enemy contact deals 25, and health at or below zero deactivates the player indefinitely. There is no automatic restart after death and no automatic regeneration after clearing the birds.
+
+The active MainScreen has no gameplay Canvas/UI, level number, difficulty increase, scene transition, or reachable win path. `Level1` through `Level7`, `Cleared`, `Win`, `LoadCurrentScene`, `MySceneManager`, and scene-index progression are legacy, disabled, disconnected, or broken content and are explicitly excluded from this port.
+
+Unity maps its `Start` input to `Escape`; `Initialize.Update()` uses that edge to regenerate in place. The standalone retains its established, unambiguous `ESC = exit` behavior. `R` is the production equivalent of Unity's Start/Escape regeneration. `F5` is an intentional standalone/debug extension for exact-current-seed regeneration.
+
+### Derived run states
+
+`Core/RunState.cs` names `Playing`, `PlayerDead`, and `AllBirdsDead`. `Core/MainScreenRun.cs` does not store a second mutable lifecycle flag: it derives state from authoritative player life/health and living-enemy population.
+
+- `Playing` means the player is alive and one or more birds remain.
+- `PlayerDead` means player health is zero/inactive. Movement and firing reject input, enemies may remain, and no timer, respawn, scene load, or cave regeneration occurs.
+- `AllBirdsDead` means the player is alive and no birds remain. The current cave and player continue normally, and there is no replacement spawn, regeneration, difficulty change, level advance, or scene load.
+
+The fixed simulation order is player movement, projectile creation/motion and enemy damage, enemy navigation, then enemy contact damage. That order does not normally produce simultaneous player death and final-enemy death because a bird killed by the projectile phase cannot deal contact damage later in the step. If tests or future external integration force both facts true, `PlayerDead` deterministically takes precedence; `AllBirdsDead` specifically requires a living player.
+
+### One atomic run pipeline
+
+`MainScreenRun.StartRun(seed)` is the sole authoritative pipeline used by startup, `R`, and `F5`. It first constructs a complete unpublished replacement run: cave map, cave geometry/outlines, terrain collision, safely spawned/contact-refreshed player, navigation grid built from the new outlines, exactly 15 deterministic fresh enemies, enemy navigation/pathfinder, empty projectile system, and fresh weapon state. Only after every construction step succeeds are all run references published. A failed construction therefore cannot expose a half-old/half-new simulation.
+
+The replacement clears or refreshes player health/life, position, velocity, right-facing direction, grounded/contact data, jump counters/state, and damage flash; weapon shot/transient state; all projectiles; every old enemy and its health, life, velocity, path/index, repath/contact timers, facing, steering, and flash state; the old terrain/navigation/pathfinder; pending jump/fire edges; fixed-step accumulator; camera target; and dynamic first-living-enemy debug selection. The host suppresses gameplay edges on the reset frame, so pressing reset with fire or jump cannot leak that edge into the new run. Camera X is immediately seeded from the new player and clamps against new geometry on draw.
+
+The `O`, `C`, and `N` visualization toggles are user presentation preferences and intentionally survive a reset. The standalone also preserves the selected seed only for `F5`; `R` always requests a different seed. Same-seed setup reproduces cave geometry, enemy initial positions/speeds, and other intentionally deterministic setup.
+
+### Unity reset defects intentionally fixed
+
+The original restart path mixes immediate creation with Unity's deferred object destruction and scene searches/scans. Depending on callback timing, old generated colliders/enemies can coexist briefly with replacements, navigation can scan stale geometry, and target/entity references can survive into the regenerated run. It also repositions the player without comprehensively resetting rigid-body, jump, combat, and feedback state. The standalone intentionally fixes those races by staging and swapping a complete run, rebuilding navigation only after new geometry exists, and never carrying entity/path/projectile references across reset.
+
+These fixes do not add gameplay. Player death and final-bird death remain persistent terminal conditions that require manual reset. No level progression, score, lives, checkpoints, menu, HUD, death/victory screen, save system, or scene-management path was introduced.
