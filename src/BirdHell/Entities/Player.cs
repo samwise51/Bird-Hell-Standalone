@@ -14,8 +14,10 @@ public readonly record struct PlayerCollider(float Width, float Height, Vector2 
     public float BottomOffset => Offset.Y - Height / 2f;
 }
 
-public sealed class Player
+public sealed class Player : Systems.IDamageable
 {
+    public const int DefaultMaximumHealth = 100;
+
     public Player(Vector2 position, PlayerCollider? collider = null)
     {
         Position = position;
@@ -30,8 +32,28 @@ public sealed class Player
     public Vector2 GroundNormal { get; internal set; } = Vector2.UnitY;
     public int JumpsUsed { get; internal set; }
     public int FacingDirection { get; internal set; } = 1;
+    public int MaximumHealth { get; } = DefaultMaximumHealth;
+    public int Health { get; private set; } = DefaultMaximumHealth;
+    public bool IsAlive { get; private set; } = true;
+    public bool CanTakeDamage => IsAlive;
+    public float DamageFlashTime { get; private set; }
 
     public Vector2 ColliderCenter => Position + Collider.Offset;
+
+    public void TakeDamage(int damage)
+    {
+        if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));
+        if (!IsAlive || damage == 0) return;
+        Health = Math.Max(0, Health - damage);
+        DamageFlashTime = 0.15f;
+        if (Health == 0)
+        {
+            IsAlive = false;
+            Velocity = Vector2.Zero;
+        }
+    }
+
+    public void AdvanceFeedback(float deltaTime) => DamageFlashTime = MathF.Max(0f, DamageFlashTime - deltaTime);
 
     public void Reset(Vector2 position)
     {
@@ -42,5 +64,8 @@ public sealed class Player
         GroundNormal = Vector2.UnitY;
         JumpsUsed = 0;
         FacingDirection = 1;
+        Health = MaximumHealth;
+        IsAlive = true;
+        DamageFlashTime = 0f;
     }
 }

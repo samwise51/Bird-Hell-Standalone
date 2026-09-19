@@ -35,7 +35,7 @@ public sealed class WeaponSystem
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(player);
-        if (!firePressed) return null;
+        if (!firePressed || !player.IsAlive) return null;
 
         var direction = GetAimDirection(player);
         state.ShotsFired++;

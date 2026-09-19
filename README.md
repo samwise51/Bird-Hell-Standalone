@@ -32,6 +32,7 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 - `F5`: regenerate the current seed and respawn deterministically
 - `O`: toggle terrain outlines
 - `C`: toggle the player collider and ground-normal debug view
+- `N`: toggle navigation obstacles plus the first living enemy's path and steering target
 - `ESC`: exit
 
-The game uses a 50 Hz renderer-independent player/projectile simulation and a horizontally following camera. Yellow diamonds and the short yellow line are temporary projectile and fixed-aim debug rendering.
+The game uses a 50 Hz renderer-independent player/projectile/enemy simulation and a horizontally following camera. Yellow diamonds and the short yellow line are temporary projectile and fixed-aim rendering; orange starbursts are flying enemies. The window title shows player health, living enemy count, player death, and `ALL BIRDS DEAD`.

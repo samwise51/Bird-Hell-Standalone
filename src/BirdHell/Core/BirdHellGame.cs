@@ -22,6 +22,10 @@ public sealed class BirdHellGame : Game
     private TerrainCollisionSystem? _terrainCollision;
     private PlayerMovementSystem? _playerMovement;
     private ProjectileSystem? _projectileSystem;
+    private NavigationGrid? _navigationGrid;
+    private EnemyNavigationSystem? _enemyNavigation;
+    private readonly EnemyCombatSystem _enemyCombat = new();
+    private readonly EnemyPopulation _enemyPopulation = new();
     private VertexPositionColor[] _terrainVertices = [];
     private int[] _triangleIndices = [];
     private VertexPositionColor[] _outlineVertices = [];
@@ -31,10 +35,14 @@ public sealed class BirdHellGame : Game
     private string _currentSeed = string.Empty;
     private bool _showOutlines;
     private bool _showCollisionDebug;
+    private bool _showNavigationDebug;
     private bool _pendingJump;
     private bool _pendingFire;
     private double _simulationAccumulator;
     private float _cameraX;
+    private int _displayedHealth = -1;
+    private int _displayedEnemyCount = -1;
+    private bool _displayedAllEnemiesDead;
 
     private const float SimulationStep = 0.02f;
     private const double MaximumFrameTime = 0.1;
@@ -93,6 +101,11 @@ public sealed class BirdHellGame : Game
             _showCollisionDebug = !_showCollisionDebug;
             UpdateWindowTitle();
         }
+        if (WasPressed(keyboardState, Keys.N))
+        {
+            _showNavigationDebug = !_showNavigationDebug;
+            UpdateWindowTitle();
+        }
 
         _pendingJump |= WasPressed(keyboardState, Keys.Space);
         _pendingFire |= WasPressed(keyboardState, Keys.LeftControl) ||
@@ -121,7 +134,9 @@ public sealed class BirdHellGame : Game
             ConfigureCamera(_geometry, _effect);
             DrawCaveGeometry(_effect);
             if (_player is not null) DrawPlayer(_player, _effect);
+            DrawEnemies(_effect);
             DrawCombatDebug(_effect);
+            if (_showNavigationDebug) DrawNavigationDebug(_effect);
         }
         base.Draw(gameTime);
     }
@@ -148,6 +163,10 @@ public sealed class BirdHellGame : Game
         if (_player is null) _player = new Player(spawn);
         else _player.Reset(spawn);
         _terrainCollision.RefreshContacts(_player);
+        _navigationGrid = new NavigationGrid(_geometry);
+        _enemyPopulation.Reset([]);
+        _enemyPopulation.Reset(EnemySpawnSystem.Spawn(_geometry, _navigationGrid, _terrainCollision, seed));
+        _enemyNavigation = new EnemyNavigationSystem(new AStarPathfinder(_navigationGrid), _terrainCollision);
         _simulationAccumulator = 0d;
         _pendingJump = false;
         _pendingFire = false;
@@ -252,7 +271,8 @@ public sealed class BirdHellGame : Game
                 center.Y - collider.CoreHalfHeight + MathF.Sin(angle) * collider.Radius));
         }
 
-        var playerColor = new Color(72, 210, 255);
+        var playerColor = !player.IsAlive ? new Color(80, 80, 90) :
+            player.DamageFlashTime > 0f ? Color.White : new Color(72, 210, 255);
         var vertices = new VertexPositionColor[polygon.Count + 1];
         vertices[0] = new VertexPositionColor(new Vector3(center.X, center.Y, -0.2f), playerColor);
         for (var i = 0; i < polygon.Count; i++)
@@ -314,7 +334,82 @@ public sealed class BirdHellGame : Game
         if (_player is null || _projectileSystem is null) return;
         var projectile = _weaponSystem.Fire(_weaponState, _player, _pendingFire);
         if (projectile is not null) _projectileSystem.Spawn(projectile);
-        _projectileSystem.Step(SimulationStep);
+        _projectileSystem.Step(SimulationStep, _enemyPopulation.CreateProjectileTargets());
+        _enemyNavigation?.Step(_enemyPopulation.Enemies, _player.Position, SimulationStep);
+        _enemyCombat.Step(_enemyPopulation.Enemies, _player, SimulationStep);
+        if (_displayedHealth != _player.Health || _displayedEnemyCount != _enemyPopulation.LivingCount ||
+            _displayedAllEnemiesDead != _enemyPopulation.AllEnemiesDead)
+            UpdateWindowTitle();
+    }
+
+    private void DrawEnemies(BasicEffect effect)
+    {
+        const int steps = 16;
+        foreach (var enemy in _enemyPopulation.LivingEnemies)
+        {
+            var center = enemy.ColliderCenter;
+            var color = enemy.DamageFlashTime > 0f ? Color.White : new Color(255, 104, 64);
+            var vertices = new VertexPositionColor[steps + 1];
+            vertices[0] = new VertexPositionColor(new Vector3(center.X, center.Y, -0.25f), color);
+            for (var index = 0; index < steps; index++)
+            {
+                var angle = index * MathF.Tau / steps;
+                var radius = enemy.ColliderRadius * (index % 2 == 0 ? 1f : 0.82f);
+                vertices[index + 1] = new VertexPositionColor(
+                    new Vector3(center.X + MathF.Cos(angle) * radius, center.Y + MathF.Sin(angle) * radius, -0.25f),
+                    color);
+            }
+            var indices = new int[steps * 3];
+            for (var index = 0; index < steps; index++)
+            {
+                indices[index * 3] = 0;
+                indices[index * 3 + 1] = index + 1;
+                indices[index * 3 + 2] = (index + 1) % steps + 1;
+            }
+            foreach (var pass in effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                GraphicsDevice.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList, vertices, 0, vertices.Length, indices, 0, indices.Length / 3);
+            }
+        }
+    }
+
+    private void DrawNavigationDebug(BasicEffect effect)
+    {
+        if (_navigationGrid is null) return;
+        var lines = new List<VertexPositionColor>();
+        var blockedColor = new Color(170, 40, 210, 110);
+        for (var y = 0; y < _navigationGrid.Height; y += 2)
+        for (var x = 0; x < _navigationGrid.Width; x += 2)
+        {
+            var cell = new NavigationCell(x, y);
+            if (_navigationGrid.IsWalkable(cell)) continue;
+            var center = _navigationGrid.CellToWorld(cell);
+            lines.Add(new VertexPositionColor(new Vector3(center.X - 0.18f, center.Y, -0.45f), blockedColor));
+            lines.Add(new VertexPositionColor(new Vector3(center.X + 0.18f, center.Y, -0.45f), blockedColor));
+        }
+
+        var selected = _enemyPopulation.LivingEnemies.FirstOrDefault();
+        if (selected is not null)
+        {
+            for (var index = Math.Max(0, selected.PathIndex - 1); index < selected.Path.Count - 1; index++)
+            {
+                var first = selected.Path[index];
+                var second = selected.Path[index + 1];
+                lines.Add(new VertexPositionColor(new Vector3(first.X, first.Y, -0.46f), Color.LimeGreen));
+                lines.Add(new VertexPositionColor(new Vector3(second.X, second.Y, -0.46f), Color.LimeGreen));
+            }
+            lines.Add(new VertexPositionColor(new Vector3(selected.ColliderCenter.X, selected.ColliderCenter.Y, -0.47f), Color.Yellow));
+            lines.Add(new VertexPositionColor(new Vector3(selected.SteeringTarget.X, selected.SteeringTarget.Y, -0.47f), Color.Yellow));
+        }
+
+        if (lines.Count == 0) return;
+        foreach (var pass in effect.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, lines.ToArray(), 0, lines.Count / 2);
+        }
     }
 
     private void DrawCombatDebug(BasicEffect effect)
@@ -359,6 +454,13 @@ public sealed class BirdHellGame : Game
         }
     }
 
-    private void UpdateWindowTitle() =>
-        Window.Title = $"Bird Hell - A/D or Arrows move, SPACE jump, LMB/Left Ctrl/controller A fire, R new, F5 same, O outlines, C collision, ESC exit - Seed: {_currentSeed}";
+    private void UpdateWindowTitle()
+    {
+        _displayedHealth = _player?.Health ?? 0;
+        _displayedEnemyCount = _enemyPopulation.LivingCount;
+        _displayedAllEnemiesDead = _enemyPopulation.AllEnemiesDead;
+        var state = _displayedAllEnemiesDead ? " - ALL BIRDS DEAD" : _player is { IsAlive: false } ? " - PLAYER DEAD" : string.Empty;
+        Window.Title = $"Bird Hell - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state} - " +
+                       $"A/D move, SPACE jump, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, ESC exit - Seed: {_currentSeed}";
+    }
 }

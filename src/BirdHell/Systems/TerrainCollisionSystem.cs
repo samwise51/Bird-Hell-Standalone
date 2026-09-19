@@ -87,6 +87,66 @@ public sealed class TerrainCollisionSystem
         return float.IsFinite(hitFraction);
     }
 
+    public bool IntersectsCircle(Vector2 center, float radius, float tolerance = 0.0001f)
+    {
+        if (radius < 0f || !float.IsFinite(radius)) throw new ArgumentOutOfRangeException(nameof(radius));
+        return _segments.Any(segment => DistanceSquaredToSegment(center, segment) <
+                                        (radius - tolerance) * (radius - tolerance));
+    }
+
+    public void MoveCircle(ref Vector2 center, ref Vector2 velocity, Vector2 displacement, float radius)
+    {
+        if (!TrySweepCircle(center, displacement, radius, out var fraction))
+        {
+            center += displacement;
+            return;
+        }
+
+        var safeFraction = MathF.Max(0f, fraction - Skin / MathF.Max(displacement.Length(), Skin));
+        center += displacement * safeFraction;
+        var closest = ClosestPoint(center, out var segment);
+        var normal = center - closest;
+        if (normal.LengthSquared() <= 0.000001f)
+        {
+            var edge = segment.B - segment.A;
+            normal = Vector2.Normalize(new Vector2(-edge.Y, edge.X));
+            if (Vector2.Dot(normal, displacement) > 0f) normal = -normal;
+        }
+        else normal = Vector2.Normalize(normal);
+        var inward = Vector2.Dot(velocity, normal);
+        if (inward < 0f) velocity -= normal * inward;
+    }
+
+    public static float DistanceSquaredToSegment(Vector2 point, TerrainSegment segment)
+    {
+        var edge = segment.B - segment.A;
+        var lengthSquared = edge.LengthSquared();
+        if (lengthSquared <= 0.000001f) return Vector2.DistanceSquared(point, segment.A);
+        var t = Math.Clamp(Vector2.Dot(point - segment.A, edge) / lengthSquared, 0f, 1f);
+        return Vector2.DistanceSquared(point, segment.A + edge * t);
+    }
+
+    private Vector2 ClosestPoint(Vector2 point, out TerrainSegment closestSegment)
+    {
+        var best = float.PositiveInfinity;
+        var result = point;
+        closestSegment = default;
+        foreach (var segment in _segments)
+        {
+            var edge = segment.B - segment.A;
+            var t = edge.LengthSquared() <= 0.000001f
+                ? 0f
+                : Math.Clamp(Vector2.Dot(point - segment.A, edge) / edge.LengthSquared(), 0f, 1f);
+            var candidate = segment.A + edge * t;
+            var distance = Vector2.DistanceSquared(point, candidate);
+            if (distance >= best) continue;
+            best = distance;
+            result = candidate;
+            closestSegment = segment;
+        }
+        return result;
+    }
+
     internal static bool TrySweepPointAgainstSegment(
         Vector2 start,
         Vector2 displacement,

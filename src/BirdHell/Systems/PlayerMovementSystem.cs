@@ -32,6 +32,12 @@ public sealed class PlayerMovementSystem
         if (!float.IsFinite(deltaTime) || deltaTime <= 0f || deltaTime > 0.1f)
             throw new ArgumentOutOfRangeException(nameof(deltaTime));
 
+        if (!player.IsAlive)
+        {
+            player.Velocity = Vector2.Zero;
+            return;
+        }
+
         _collision.RefreshContacts(player);
         if (player.IsGrounded)
         {

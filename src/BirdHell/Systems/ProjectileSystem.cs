@@ -6,6 +6,7 @@ namespace BirdHell.Systems;
 
 public interface IDamageable
 {
+    bool CanTakeDamage => true;
     void TakeDamage(int damage);
 }
 
@@ -81,7 +82,7 @@ public sealed class ProjectileSystem
         IDamageable? result = null;
         foreach (var target in targets)
         {
-            if (target.Damageable is null || target.Radius < 0f) continue;
+            if (target.Damageable is null || !target.Damageable.CanTakeDamage || target.Radius < 0f) continue;
             if (!TerrainCollisionSystem.TrySweepPointAgainstCircle(
                     projectile.ColliderCenter,
                     displacement,

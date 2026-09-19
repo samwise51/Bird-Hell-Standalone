@@ -127,7 +127,7 @@ The collision solver is a focused standalone replacement for Unity Rigidbody2D/P
 
 ### Deferred coupling
 
-`Player.cs` health, damage flash, audio, death effect, activation state, and health reset are deferred. Animator speed/jump/crouch/attack flags, sprite flipping, weapon/fire point/bullets, crouching, pause/reload UI, enemy spawning/targets, A* rescans, mobile joystick/buttons, out-of-bounds teleport, scene transitions, and sophisticated camera behavior are also deferred. None is required for Milestone 3 movement or terrain collision.
+Player health, damage feedback, death state, health reset, enemy spawning/targets, and deterministic A* rebuilding are implemented by Milestone 5. Audio, death effects, animator flags, crouching, pause/reload UI, mobile joystick/buttons, out-of-bounds teleport, scene transitions, and sophisticated camera behavior remain deferred.
 
 ## Combat, weapon, and projectiles
 
@@ -170,7 +170,7 @@ Callback ordering for exactly simultaneous trigger contacts is Unity/Box2D-speci
 - `Entities/Projectile.cs` stores renderer-independent transform position, normalized direction, constant velocity inputs, damage, exact collider geometry, age, and optional lifetime data.
 - `Entities/WeaponState.cs` records deterministic shots fired. It deliberately has no ammo or reload state because the original has neither.
 - `Systems/WeaponSystem.cs` owns the serialized muzzle/projectile configuration and creates one projectile for each supplied Fire1 edge. It derives horizontal aim solely from `Player.FacingDirection`.
-- `Systems/ProjectileSystem.cs` owns live projectiles, fixed-step motion, terrain impact removal, lifetime handling when explicitly configured, and nearest-hit damage dispatch through the minimal `IDamageable`/`ProjectileTarget` abstraction. No gameplay enemy is instantiated.
+- `Systems/ProjectileSystem.cs` owns live projectiles, fixed-step motion, terrain impact removal, lifetime handling when explicitly configured, and nearest-hit damage dispatch through the minimal `IDamageable`/`ProjectileTarget` abstraction. Milestone 5 supplies living enemy circle targets through that same abstraction.
 - `Systems/TerrainCollisionSystem.TrySweepCircle` continuously sweeps the projectile circle against the exact line segments derived from `CaveGeometry.Outlines`. It checks the segment strip and both endpoint caps, so a projectile cannot tunnel through ordinary outline terrain at expected or test-elevated speeds. It never consults `CaveMap` cells.
 - `Core/BirdHellGame.cs` queues Left Ctrl, left-mouse, and controller-A press edges into the existing 50 Hz simulation, resets combat on cave regeneration, and draws temporary yellow projectile diamonds plus a horizontal aim line. Rendering does not own or advance simulation state.
 
@@ -180,4 +180,44 @@ Equivalent input and cave geometry produce deterministic projectile state. Facin
 
 Terrain and abstract damage-target contacts are implemented now. Exact Unity trigger interaction with unrelated dynamic colliders, including consuming a projectile on the player, is deferred until those collider-owning entities exist in the standalone. If a terrain and damage target are hit in one step, the standalone resolves the earliest swept hit (target wins an exact tie) rather than relying on unspecified Unity callback order. Continuous collision is an analytic circle sweep rather than Unity Rigidbody2D/Box2D.
 
-The impact animation and its broad tag-based cleanup, bullet/impact artwork, bullet animator, player attack animation flag, all audio, damage flash, enemy death/kill tracking, enemy AI/spawning, mobile fire button, and final combat UI remain deferred. There is no ammo or reload UI to defer because the original active weapon has no ammo/reload model. Mouse aiming, fire-rate timers, recoil, spread, and weapon switching were not added because they are absent from the traced implementation.
+The impact animation and its broad tag-based cleanup, bullet/impact artwork, bullet animator, player attack animation flag, all audio, death effects, mobile fire button, and final combat UI remain deferred. Enemy damage flash, death tracking, AI, and spawning are implemented by Milestone 5. There is no ammo or reload UI to defer because the original active weapon has no ammo/reload model. Mouse aiming, fire-rate timers, recoil, spread, and weapon switching were not added because they are absent from the traced implementation.
+
+## Flying enemies, navigation, health, and death
+
+### Active original values
+
+`MainScreen.unity` creates 15 instances of the flying enemy. Each has health `100`; the active bullet deals `25`, so four hits kill a default enemy. `Initialize.SpawnEnemies()` independently assigns `AIPath.maxSpeed = Random.Range(2, 10)`, producing integer speeds 2 through 9. The active `AIPath` values are maximum acceleration `10`, slowdown distance `0.6`, end-reached distance `0.2`, repath interval `0.5`, pick-next-waypoint distance `2`, no gravity, and no rotation. `birdGFX` faces by horizontal desired velocity.
+
+The effective enemy circle collider has radius approximately `0.45807048` and offset approximately `(-0.15384216, -0.07692099)`. Active scene serialization overrides the source default and sets player contact damage to `25`. Every enemy increments its own timer on every `0.02` fixed update, including while not touching. While overlapping, damage occurs only when that timer is strictly greater than one second and then only that enemy's timer resets. This yields a nominal 1.02-second repeat cadence. There is no knockback, shared invulnerability, enemy attack animation, enemy projectile, or enemy gravity. Death removes the enemy; the final death only logs `All Birds Dead`.
+
+### Original A* configuration
+
+The Unity project uses A* Pathfinding Project 4.2.15 and a `GridGraph` centered at `(0,0)`, sized `128 × 72`, with node size `1`. It uses eight-way neighbors, disables diagonal corner cutting, checks obstacles with radius `0.5`, recalculates every `0.5` seconds, rejects partial paths, keeps an old path after a failed replan, and permits nearest-node resolution up to distance `100`. Obstacles are generated `EdgeCollider2D` outlines, not logical `CaveMap` wall cells.
+
+### Standalone architecture
+
+- `Entities/Enemy.cs` owns transform/velocity, exact effective collider geometry, 100 health, integer maximum speed, per-enemy contact/repath state, facing, damage feedback, path state, and `IDamageable` behavior.
+- `World/NavigationGrid.cs` builds a renderer-independent `128 × 72`, one-unit, origin-centered graph. A node is blocked when its center lies within `0.5` of any `CaveOutline` segment. It exposes deterministic eight-way neighbors and rejects diagonals when either adjacent cardinal node is blocked.
+- `Systems/AStarPathfinder.cs` resolves nearest walkable start/end cells within 100 units, uses deterministic `(f, heuristic, index)` tie ordering, returns ordered world-space points, and returns no partial path. A failed enemy replan leaves the prior valid path untouched.
+- `Systems/EnemyNavigationSystem.cs` replans at 0.5 seconds in the 50 Hz simulation, looks ahead across waypoints within 2 units, accelerates by at most 10 units/sec², clamps randomized speed, slows over the final 0.6 units, and stops within 0.2. Circle sweeps reuse `TerrainCollisionSystem` outline segments. A two-pass deterministic pairwise circle separation is intentionally small and is not flocking or RVO.
+- `Systems/EnemyCombatSystem.cs` continuously advances independent contact timers and tests the enemy circle against the player's effective capsule. A strictly-greater-than-one-second overlapping timer deals 25 with no knockback or global immunity.
+- `Systems/EnemySpawnSystem.cs` and `EnemyPopulation.cs` own deterministic reset, 15-enemy creation, living-target projection, living count, and `AllEnemiesDead`.
+- `Player` now implements `IDamageable`, starts at 100/100 health, becomes inactive for movement and firing at zero, and resets to alive with full health whenever the cave regenerates.
+
+Initialization is explicit: generate `CaveMap`; build `CaveGeometry`/`CaveOutline`; prepare terrain collision; reset/spawn the player; build navigation; clear old enemies; spawn 15 enemies; begin fixed-step gameplay. `R` and `F5` both rebuild all gameplay state, with `F5` reproducing the same enemy speeds and initial positions for the same seed.
+
+### Spawn stabilization and intentional differences
+
+Unity places all 15 enemies at the exact unchecked center of the first generated edge-collider bounds. The standalone derives that same first-outline bounds-center reference, then applies only these stabilizations:
+
+1. resolve the reference to the nearest walkable one-unit navigation-cell center, ensuring the original `0.5` obstacle scan clearance;
+2. add deterministic golden-angle offsets of `0.0125 × sqrt(enemyIndex)` units so no pair begins at mathematically identical coordinates, falling back to the safe center if an offset intersects an outline;
+3. run the small deterministic circle-separation pass during simulation so the still-tightly-clustered circles do not remain catastrophically overlapped.
+
+This remains one localized original-style cluster. It does not distribute enemies among rooms, add local avoidance, or redesign spawning. Enemy speed randomization uses a stable seed hash so same-seed resets are reproducible, unlike Unity's process-global random sequence. Startup/reload deliberately avoids the original Awake/scan race, stale player target, deferred-destruction overlap, and player-as-static-obstacle artifacts. Analytic outline collision replaces Rigidbody2D separation; tie/callback details therefore do not depend on Box2D ordering.
+
+Temporary orange primitives distinguish enemies from the cyan player. White flashes show damage; a dead player is gray. The title reports health, living enemies, `PLAYER DEAD`, and `ALL BIRDS DEAD`. `N` shows a lightweight sample of blocked graph cells, the first living enemy's path, and its steering line without crowding normal play.
+
+### Deferred enemy functionality
+
+Final bird/player artwork, animator coupling, audio, hit/death particle prefabs, UI screens, health bars, cleared-screen/next-level/win transitions, mobile controls, enemy projectiles, attacks beyond contact, and sophisticated RVO/flocking remain deferred. `AllEnemiesDead` is state/debug feedback only.
