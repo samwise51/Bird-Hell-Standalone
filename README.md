@@ -35,7 +35,11 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 - `N`: toggle navigation obstacles plus the first living enemy's path and steering target
 - `ESC`: exit
 
-The game uses a 50 Hz renderer-independent player/projectile/enemy simulation and a horizontally following camera. Yellow diamonds are temporary projectile rendering; orange starbursts are flying enemies. The `C` debug view also shows a short yellow line from the weapon muzzle in the fixed horizontal aim/facing direction. The window title shows player health, living enemy count, player death, and `ALL BIRDS DEAD`.
+The game uses a 50 Hz renderer-independent player/projectile/enemy simulation. Its logical 2D camera starts at `(0,0)` and, once per fixed step, lerps toward `player position + (0,1)` by exactly `0.15`. The view always spans 10 world units vertically; viewport aspect determines the horizontal span. There is no clamp, dead zone, or look-ahead, so horizontal and vertical movement remain smooth even beyond cave edges.
+
+Yellow diamonds are temporary projectile rendering; orange starbursts are flying enemies. The `C` debug view also shows a short yellow line from the weapon muzzle in the fixed horizontal aim/facing direction. The window title shows player health, living enemy count, player death, and `ALL BIRDS DEAD`.
+
+The presentation foundation uses a point-sampled SpriteBatch layer for future approved sprites and a generated one-pixel, screen-attached backdrop that remains fixed while the camera moves. Terrain, player, enemies, projectiles, and debug views remain primitive world-space rendering. No Unity/Sunnyland image, sprite, animation, or audio asset has been copied: provenance and redistribution rights are unresolved, so sprite, audio, and effect replacement work is deferred.
 
 ## Procedural run lifecycle
 
@@ -45,4 +49,4 @@ Each run contains one generated cave, one 100-health player, and exactly 15 bird
 - `PlayerDead`: health reached zero; movement and firing remain disabled until `R` or `F5` is pressed. Nothing restarts automatically.
 - `AllBirdsDead`: the player remains controllable in the current cave; no birds respawn and nothing advances or regenerates until `R` or `F5` is pressed.
 
-Both reset keys replace the cave, collision, player, projectiles, enemies, and navigation as one complete run. Debug visualization toggles remain selected. `ESC` remains the unambiguous standalone exit key. There are no levels, difficulty progression, scene transitions, score, death screen, or victory screen in the active procedural path.
+Both reset keys replace the cave, collision, player, projectiles, enemies, and navigation as one complete run. The camera retains its current logical position and smoothly travels toward the replacement player; it never retains a player/entity reference. Debug visualization toggles remain selected. `ESC` remains the unambiguous standalone exit key. There are no levels, difficulty progression, scene transitions, score, death screen, or victory screen in the active procedural path.

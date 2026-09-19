@@ -111,7 +111,7 @@ The controller calls `ObeyGravity`, ground check, slope checks, and movement in 
 
 `Initialize.Awake()` generates the map. `Start()` then calls `TranslatePlayer`, and reload calls generation followed by `TranslatePlayer`. The original obtains generated `EdgeCollider2D[]`, selects element zero, and sets the player transform to `(firstCollider.bounds.center.x - 5, firstCollider.bounds.center.y - 5)`. It does not verify clearance, choose a floor, reset velocity, or prove which generated outline becomes collider zero. This can embed the player and cannot safely be copied as-is.
 
-The standalone preserves the original `first/primary outline bounds center X - 5` preference, then deterministically searches nearby floor intersections from the ordered `CaveOutline` segments. Candidates are rejected if the effective capsule penetrates any boundary or sampled capsule points lie in filled `CaveGeometry` triangles. The selected spawn is therefore geometry-derived, deterministic for a same-seed cave, and clear of solid terrain. Both `R` and `F5` reset position, velocity, jump state, simulation accumulator, and camera.
+The standalone preserves the original `first/primary outline bounds center X - 5` preference, then deterministically searches nearby floor intersections from the ordered `CaveOutline` segments. Candidates are rejected if the effective capsule penetrates any boundary or sampled capsule points lie in filled `CaveGeometry` triangles. The selected spawn is therefore geometry-derived, deterministic for a same-seed cave, and clear of solid terrain. Both `R` and `F5` reset position, velocity, jump state, and the simulation accumulator; Milestone 7 intentionally preserves camera position across replacement.
 
 ### Standalone architecture and intentional differences
 
@@ -119,15 +119,15 @@ The standalone preserves the original `first/primary outline bounds center X - 5
 - `Systems/PlayerMovementSystem.cs` owns input-independent 50 Hz movement, custom gravity, jump limiting, variable jump height, full air control, and slope-tangent movement.
 - `Systems/TerrainCollisionSystem.cs` converts only ordered `CaveOutline` points to line segments. It resolves a vertical capsule against floors, walls, ceilings, and diagonal segments with displacement substeps, penetration projection, velocity clipping, a `0.0025` skin, and a `0.035` support probe. It never consults rectangular `CaveMap` cells.
 - `Systems/PlayerSpawnSystem.cs` selects deterministic safe positions using outlines and filled geometry triangles.
-- `Core/BirdHellGame.cs` adapts MonoGame keyboard state, accumulates fixed `0.02` simulation steps independently of rendering, renders a temporary capsule, and follows/clamps the camera horizontally.
+- `Core/BirdHellGame.cs` adapts MonoGame keyboard state, accumulates fixed `0.02` simulation steps independently of rendering, renders a temporary capsule, and advances a renderer-independent 2D camera at the same cadence.
 
-The collision solver is a focused standalone replacement for Unity Rigidbody2D/Physics2D; no third-party physics engine is used. It preserves direct speed assignment, two jumps, 45-degree walkable slopes, slope following, variable gravity, effective collider dimensions, and no-bounce/no-idle-slip results. It does not reproduce Box2D drag, material-combine details, contact solver iteration order, or the apparent uninitialized-ground-normal bug. An airborne player at exactly zero vertical speed is treated as falling so the gravity multiplier does not depend on fixed-step size. The safe spawn is deliberately stricter than Unity's unchecked transform assignment. The camera is intentionally limited to horizontal following with level-bound clamping.
+The collision solver is a focused standalone replacement for Unity Rigidbody2D/Physics2D; no third-party physics engine is used. It preserves direct speed assignment, two jumps, 45-degree walkable slopes, slope following, variable gravity, effective collider dimensions, and no-bounce/no-idle-slip results. It does not reproduce Box2D drag, material-combine details, contact solver iteration order, or the apparent uninitialized-ground-normal bug. An airborne player at exactly zero vertical speed is treated as falling so the gravity multiplier does not depend on fixed-step size. The safe spawn is deliberately stricter than Unity's unchecked transform assignment. The camera now follows both axes without cave-bound clamping, matching the active MainScreen audit.
 
 `SPACE` is now exclusively jump. Same-seed regeneration moved to `F5`; `R` creates a new seed, `O` toggles terrain outlines, `C` toggles capsule/ground-normal debug rendering, and `ESC` exits.
 
 ### Deferred coupling
 
-Player health, damage feedback, death state, health reset, enemy spawning/targets, and deterministic A* rebuilding are implemented by Milestone 5. Audio, death effects, animator flags, crouching, pause/reload UI, mobile joystick/buttons, out-of-bounds teleport, scene transitions, and sophisticated camera behavior remain deferred.
+Player health, damage feedback, death state, health reset, enemy spawning/targets, deterministic A* rebuilding, and the active camera behavior are implemented. Audio, death effects, animator flags, crouching, pause/reload UI, mobile joystick/buttons, out-of-bounds teleport, and scene transitions remain deferred.
 
 ## Combat, weapon, and projectiles
 
@@ -246,7 +246,7 @@ The fixed simulation order is player movement, projectile creation/motion and en
 
 `MainScreenRun.StartRun(seed)` is the sole authoritative pipeline used by startup, `R`, and `F5`. It first constructs a complete unpublished replacement run: cave map, cave geometry/outlines, terrain collision, safely spawned/contact-refreshed player, navigation grid built from the new outlines, exactly 15 deterministic fresh enemies, enemy navigation/pathfinder, empty projectile system, and fresh weapon state. Only after every construction step succeeds are all run references published. A failed construction therefore cannot expose a half-old/half-new simulation.
 
-The replacement clears or refreshes player health/life, position, velocity, right-facing direction, grounded/contact data, jump counters/state, and damage flash; weapon shot/transient state; all projectiles; every old enemy and its health, life, velocity, path/index, repath/contact timers, facing, steering, and flash state; the old terrain/navigation/pathfinder; pending jump/fire edges; fixed-step accumulator; camera target; and dynamic first-living-enemy debug selection. The host suppresses gameplay edges on the reset frame, so pressing reset with fire or jump cannot leak that edge into the new run. Camera X is immediately seeded from the new player and clamps against new geometry on draw.
+The replacement clears or refreshes player health/life, position, velocity, right-facing direction, grounded/contact data, jump counters/state, and damage flash; weapon shot/transient state; all projectiles; every old enemy and its health, life, velocity, path/index, repath/contact timers, facing, steering, and flash state; the old terrain/navigation/pathfinder; pending jump/fire edges; fixed-step accumulator; and dynamic first-living-enemy debug selection. The host suppresses gameplay edges on the reset frame, so pressing reset with fire or jump cannot leak that edge into the new run. Camera position and debug preferences are presentation state and deliberately survive the atomic gameplay replacement; the camera receives only the current player's numeric position on later fixed steps, so it cannot retain a stale entity reference.
 
 The `O`, `C`, and `N` visualization toggles are user presentation preferences and intentionally survive a reset. The standalone also preserves the selected seed only for `F5`; `R` always requests a different seed. Same-seed setup reproduces cave geometry, enemy initial positions/speeds, and other intentionally deterministic setup.
 
@@ -255,3 +255,25 @@ The `O`, `C`, and `N` visualization toggles are user presentation preferences an
 The original restart path mixes immediate creation with Unity's deferred object destruction and scene searches/scans. Depending on callback timing, old generated colliders/enemies can coexist briefly with replacements, navigation can scan stale geometry, and target/entity references can survive into the regenerated run. It also repositions the player without comprehensively resetting rigid-body, jump, combat, and feedback state. The standalone intentionally fixes those races by staging and swapping a complete run, rebuilding navigation only after new geometry exists, and never carrying entity/path/projectile references across reset.
 
 These fixes do not add gameplay. Player death and final-bird death remain persistent terminal conditions that require manual reset. No level progression, score, lives, checkpoints, menu, HUD, death/victory screen, save system, or scene-management path was introduced.
+
+## 2D camera and presentation foundation
+
+### Active Unity camera behavior
+
+The active `MainScreen` camera is orthographic with size `5`, giving a fixed 10-world-unit vertical span. Its `SmoothCam` target offset is `(0,1)`. On every Unity `FixedUpdate`, it assigns `camera = Lerp(camera, player.position + offset, 0.15)`. The factor is therefore exactly `0.15` per fixed simulation step rather than a delta-time-normalized smoothing rate. It follows both X and Y with no dead zone, cave-bound clamp, velocity look-ahead, or shake. Its initial XY position is `(0,0)`, and regeneration does not reposition it; after the player teleports, it travels smoothly to the replacement target. Player death and final-bird death do not alter camera state. The background is a camera child and has no parallax.
+
+### Standalone camera and projection
+
+`Presentation/Camera2D.cs` owns only logical `System.Numerics.Vector2` position and the audited constants. `BirdHellGame` passes the current player's value position after each 0.02-second gameplay step. `Camera2D` stores no `Player`, run, geometry, renderer, or depth reference. A fresh host leaves it at `(0,0)` until fixed simulation begins. `R` and `F5` replace gameplay atomically without touching the camera, after which normal fixed steps target the new player. The same update remains active in `PlayerDead` and `AllBirdsDead` states.
+
+`CameraView` derives orthographic bounds from the current logical center. Vertical span is always exactly `10`; horizontal span is `10 × viewportWidth / viewportHeight` (approximately `13.333333` at 4:3 and `17.777778` at 16:9). Projection is recomputed from the current MonoGame viewport every draw, including after a window resize, and never inspects cave bounds. Simulation coordinates remain world coordinates.
+
+### Presentation layers and assets
+
+`Presentation/SpritePresentation.cs` owns SpriteBatch concerns separately from `Camera2D`. It exposes point-clamped screen and world sprite foundations, a world-to-screen transform matching the primitive camera, and a required-content loader that adds the asset name and content root to load failures. Milestone 7 needs no MGCB asset: a standalone-generated one-pixel texture fills the viewport through SpriteBatch as a screen-attached backdrop. It stays visually fixed while the camera moves and does not parallax.
+
+The explicit draw order is: generated background; cave terrain; enemy/world entity placeholders; player placeholder; projectile/foreground placeholders; terrain outline, collision/facing, and navigation debug overlays. Existing primitive gameplay/debug rendering remains world-aligned and debug lines draw last for visibility.
+
+No PNG, JPG, MP3, WAV, sprite sheet, animation, Sunnyland asset, or other Unity/third-party asset was copied. In particular, `Assets/Sunnyland/artwork/Environment/back.png` is not present. Original or replacement player/enemy/projectile/effect sprites, animation, audio/music, and final background work remain deferred until standalone-owned or otherwise approved content is available.
+
+Intentional presentation differences from Unity in this milestone are the generated solid-color backdrop and primitive gameplay placeholders. The camera motion and framing follow the audited active behavior; MonoGame renders the latest fixed-step camera state without adding render-time interpolation.
