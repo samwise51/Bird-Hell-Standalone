@@ -128,3 +128,56 @@ The collision solver is a focused standalone replacement for Unity Rigidbody2D/P
 ### Deferred coupling
 
 `Player.cs` health, damage flash, audio, death effect, activation state, and health reset are deferred. Animator speed/jump/crouch/attack flags, sprite flipping, weapon/fire point/bullets, crouching, pause/reload UI, enemy spawning/targets, A* rescans, mobile joystick/buttons, out-of-bounds teleport, scene transitions, and sophisticated camera behavior are also deferred. None is required for Milestone 3 movement or terrain collision.
+
+## Combat, weapon, and projectiles
+
+### Original source and active wiring
+
+The combat trace covered `Assets/scripts/Weapon.cs`, `Bullet.cs`, `Player.cs`, `PlayerMovement.cs`, `Weaponmobile.cs`, `PlayerMovementmobile.cs`, `Enemy.cs`, `NewCharacterController2D.cs`, `MeshGenerator.cs`, and `DestroyClone.cs`. Script GUIDs were followed through `Assets/Scenes/MainScreen.unity`, `Assets/prefab/Bullet.prefab`, `player.prefab`, `player mobile.prefab`, `Enemy.prefab`, and `ImpactEffect.prefab`. `ProjectSettings/InputManager.asset`, `Physics2DSettings.asset`, `TagManager.asset`, and `EditorBuildSettings.asset` supplied input, layer, and active-scene evidence. The Unity project remained read-only.
+
+`EditorBuildSettings.asset` enables only `MainScreen.unity`. Its active, scene-embedded `player` object has an enabled `Weapon` component (script GUID `af8d2921039bafa4d8f3f4d9bd6ec992`) whose `firePoint` references the player's `FirePoint` child and whose `bulletPrefab` references `Assets/prefab/Bullet.prefab` (GUID `c78e053e14e4b354ba7a747474680066`). This is the authoritative desktop implementation. The reusable desktop player prefab has the same configured `Weapon`; the separate `Weaponmobile`/button path is not active in MainScreen and its scene-relevant references are unset.
+
+There is no distinct weapon GameObject or selectable weapon prefab. `Weapon` is a component on the player. There is no weapon switching, recoil, knockback, spread, randomization, magazine, reserve ammunition, reload, reload duration, or time-based fire-rate field anywhere in this path.
+
+### Input, direction, and serialized values
+
+`Weapon.Update()` calls `Shoot()` only on `Input.GetButtonDown("Fire1")`, so one projectile is created per button-down edge and holding the button does not repeat. The desktop `Fire1` mapping is Left Ctrl with left mouse as its alternate; a second same-named Input Manager entry maps joystick button 0. The standalone ports these as Left Ctrl, left mouse, and controller A. No reload control exists.
+
+There is no mouse-position read, screen-to-world conversion, angle calculation, or aim script in the original combat path. `Weapon.Shoot()` instantiates at `firePoint.position` and `firePoint.rotation`; `Bullet.Start()` assigns `rb.velocity = transform.right * speed`. MainScreen serializes the fire point at local `(0.086, 0, 0)` under the uniformly scale-4 player, giving an effective `0.344` world-unit muzzle offset. `NewCharacterController2D.Flip()` rotates the player 180 degrees around Y, so inherited `transform.right` and the muzzle offset reverse when facing changes. Aim is therefore horizontal and facing-based. Mouse/world camera conversion is not applicable, and the horizontal camera cannot skew aim.
+
+The active serialized projectile values are:
+
+- speed `20` world units/second;
+- damage `25`;
+- no lifetime or delayed destruction;
+- dynamic `Rigidbody2D`, simulated, mass `1`, linear drag `0`, angular drag `0.05`, gravity scale `0`, continuous collision detection, no interpolation, and frozen Z rotation;
+- trigger `CircleCollider2D`, local offset `(0.34, 0.28)`, radius `0.34`, enabled;
+- prefab transform scale `(1, 1, 1)`;
+- GameObject layer `0` (`Default`).
+
+The collider's positive local X offset follows the facing flip while its Y offset remains upward. The standalone preserves both offsets and radius. With zero gravity and direct initial velocity, a projectile travels at constant speed. No script or prefab gives the bullet a finite lifetime, so a miss can persist indefinitely in Unity.
+
+### Original impact and damage behavior
+
+`Bullet.OnTriggerEnter2D` asks the contacted collider's GameObject for `Enemy`. If found, it calls `Enemy.TakeDamage(25)`. It then creates `ImpactEffect` and destroys the bullet regardless of collider type. `Enemy.TakeDamage` subtracts from serialized health `100`; at zero it plays death coupling, updates the kill tracker, creates a death effect, and destroys the enemy. The impact prefab is animation-only plus `DestroyClone`, which schedules all objects tagged `clone` for destruction after `0.4` seconds.
+
+The bullet uses Default layer 0; generated cave `EdgeCollider2D` components are placed on the layer-12 Map Generator object, enemies are layer 12, and the player is layer 11. `Physics2DSettings.asset` has an all-enabled layer collision matrix, so none of these pairs is filtered. Consequently an ordinary terrain trigger contact destroys the bullet. A bullet can also trigger against a player collider and be destroyed, although only an `Enemy` component receives damage; there is no explicit owner/self-ignore or player damage path. The forward muzzle/collider offsets normally place the shooter's own bullet ahead of the player.
+
+Callback ordering for exactly simultaneous trigger contacts is Unity/Box2D-specific. The checked-in source also does not state how long a projectile that never contacts anything is intended to remain alive; observed code has no cleanup. Duplicate same-named `Fire1` Input Manager entries make controller aggregation an engine-level detail, but the keyboard/mouse mapping is unambiguous.
+
+### Standalone architecture
+
+- `Entities/Projectile.cs` stores renderer-independent transform position, normalized direction, constant velocity inputs, damage, exact collider geometry, age, and optional lifetime data.
+- `Entities/WeaponState.cs` records deterministic shots fired. It deliberately has no ammo or reload state because the original has neither.
+- `Systems/WeaponSystem.cs` owns the serialized muzzle/projectile configuration and creates one projectile for each supplied Fire1 edge. It derives horizontal aim solely from `Player.FacingDirection`.
+- `Systems/ProjectileSystem.cs` owns live projectiles, fixed-step motion, terrain impact removal, lifetime handling when explicitly configured, and nearest-hit damage dispatch through the minimal `IDamageable`/`ProjectileTarget` abstraction. No gameplay enemy is instantiated.
+- `Systems/TerrainCollisionSystem.TrySweepCircle` continuously sweeps the projectile circle against the exact line segments derived from `CaveGeometry.Outlines`. It checks the segment strip and both endpoint caps, so a projectile cannot tunnel through ordinary outline terrain at expected or test-elevated speeds. It never consults `CaveMap` cells.
+- `Core/BirdHellGame.cs` queues Left Ctrl, left-mouse, and controller-A press edges into the existing 50 Hz simulation, resets combat on cave regeneration, and draws temporary yellow projectile diamonds plus a horizontal aim line. Rendering does not own or advance simulation state.
+
+Equivalent input and cave geometry produce deterministic projectile state. Facing is now explicit player simulation state and resets to the MainScreen serialized value `+1` on respawn. There is no fire cooldown to count down and ammunition is unlimited, matching the source. Production projectile lifetime remains `null`; optional lifetime support exists for later serialized variants and is deterministically checked but is not enabled as a Bird Hell mechanic.
+
+### Intentional differences and deferred combat work
+
+Terrain and abstract damage-target contacts are implemented now. Exact Unity trigger interaction with unrelated dynamic colliders, including consuming a projectile on the player, is deferred until those collider-owning entities exist in the standalone. If a terrain and damage target are hit in one step, the standalone resolves the earliest swept hit (target wins an exact tie) rather than relying on unspecified Unity callback order. Continuous collision is an analytic circle sweep rather than Unity Rigidbody2D/Box2D.
+
+The impact animation and its broad tag-based cleanup, bullet/impact artwork, bullet animator, player attack animation flag, all audio, damage flash, enemy death/kill tracking, enemy AI/spawning, mobile fire button, and final combat UI remain deferred. There is no ammo or reload UI to defer because the original active weapon has no ammo/reload model. Mouse aiming, fire-rate timers, recoil, spread, and weapon switching were not added because they are absent from the traced implementation.

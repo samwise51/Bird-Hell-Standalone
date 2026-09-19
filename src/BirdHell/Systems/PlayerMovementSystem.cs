@@ -40,6 +40,7 @@ public sealed class PlayerMovementSystem
         }
 
         var horizontal = Math.Clamp(input.Horizontal, -1f, 1f);
+        if (horizontal != 0f) player.FacingDirection = horizontal > 0f ? 1 : -1;
         if (player.IsGrounded && player.GroundNormal.Y < 0.999f)
         {
             var tangent = Vector2.Normalize(new Vector2(player.GroundNormal.Y, -player.GroundNormal.X));

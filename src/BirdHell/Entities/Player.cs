@@ -29,6 +29,7 @@ public sealed class Player
     public bool IsJumping { get; internal set; }
     public Vector2 GroundNormal { get; internal set; } = Vector2.UnitY;
     public int JumpsUsed { get; internal set; }
+    public int FacingDirection { get; internal set; } = 1;
 
     public Vector2 ColliderCenter => Position + Collider.Offset;
 
@@ -40,5 +41,6 @@ public sealed class Player
         IsJumping = false;
         GroundNormal = Vector2.UnitY;
         JumpsUsed = 0;
+        FacingDirection = 1;
     }
 }

@@ -72,6 +72,102 @@ public sealed class TerrainCollisionSystem
         return false;
     }
 
+    public bool TrySweepCircle(Vector2 start, Vector2 displacement, float radius, out float hitFraction)
+    {
+        if (!float.IsFinite(start.X) || !float.IsFinite(start.Y)) throw new ArgumentOutOfRangeException(nameof(start));
+        if (!float.IsFinite(displacement.X) || !float.IsFinite(displacement.Y))
+            throw new ArgumentOutOfRangeException(nameof(displacement));
+        if (!float.IsFinite(radius) || radius < 0f) throw new ArgumentOutOfRangeException(nameof(radius));
+
+        hitFraction = float.PositiveInfinity;
+        foreach (var segment in _segments)
+            if (TrySweepPointAgainstSegment(start, displacement, segment, radius, out var candidate) &&
+                candidate < hitFraction)
+                hitFraction = candidate;
+        return float.IsFinite(hitFraction);
+    }
+
+    internal static bool TrySweepPointAgainstSegment(
+        Vector2 start,
+        Vector2 displacement,
+        TerrainSegment segment,
+        float radius,
+        out float hitFraction)
+    {
+        const float epsilon = 0.000001f;
+        var earliestHit = float.PositiveInfinity;
+        hitFraction = earliestHit;
+        var edge = segment.B - segment.A;
+        var edgeLength = edge.Length();
+        if (edgeLength <= epsilon) return TrySweepPointAgainstCircle(start, displacement, segment.A, radius, out hitFraction);
+
+        var tangent = edge / edgeLength;
+        var normal = new Vector2(-tangent.Y, tangent.X);
+        var relative = start - segment.A;
+        var along = Vector2.Dot(relative, tangent);
+        var away = Vector2.Dot(relative, normal);
+        var closestAlong = Math.Clamp(along, 0f, edgeLength);
+        var closest = segment.A + tangent * closestAlong;
+        if (Vector2.DistanceSquared(start, closest) <= radius * radius)
+        {
+            hitFraction = 0f;
+            return true;
+        }
+
+        var alongVelocity = Vector2.Dot(displacement, tangent);
+        var normalVelocity = Vector2.Dot(displacement, normal);
+        if (MathF.Abs(normalVelocity) > epsilon)
+        {
+            TestStripBoundary(radius);
+            TestStripBoundary(-radius);
+        }
+
+        if (TrySweepPointAgainstCircle(start, displacement, segment.A, radius, out var firstEnd))
+            earliestHit = MathF.Min(earliestHit, firstEnd);
+        if (TrySweepPointAgainstCircle(start, displacement, segment.B, radius, out var secondEnd))
+            earliestHit = MathF.Min(earliestHit, secondEnd);
+        hitFraction = earliestHit;
+        return float.IsFinite(earliestHit);
+
+        void TestStripBoundary(float boundary)
+        {
+            var time = (boundary - away) / normalVelocity;
+            if (time < 0f || time > 1f) return;
+            var positionAlongEdge = along + alongVelocity * time;
+            if (positionAlongEdge >= 0f && positionAlongEdge <= edgeLength)
+                earliestHit = MathF.Min(earliestHit, time);
+        }
+    }
+
+    internal static bool TrySweepPointAgainstCircle(
+        Vector2 start,
+        Vector2 displacement,
+        Vector2 center,
+        float radius,
+        out float hitFraction)
+    {
+        const float epsilon = 0.000001f;
+        hitFraction = float.PositiveInfinity;
+        var relative = start - center;
+        var radiusSquared = radius * radius;
+        if (relative.LengthSquared() <= radiusSquared)
+        {
+            hitFraction = 0f;
+            return true;
+        }
+
+        var a = displacement.LengthSquared();
+        if (a <= epsilon) return false;
+        var b = 2f * Vector2.Dot(relative, displacement);
+        var c = relative.LengthSquared() - radiusSquared;
+        var discriminant = b * b - 4f * a * c;
+        if (discriminant < 0f) return false;
+        var time = (-b - MathF.Sqrt(discriminant)) / (2f * a);
+        if (time < 0f || time > 1f) return false;
+        hitFraction = time;
+        return true;
+    }
+
     private void ResolvePenetrations(Player player, Vector2 movement)
     {
         for (var iteration = 0; iteration < ResolutionIterations; iteration++)

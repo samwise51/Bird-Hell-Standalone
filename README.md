@@ -27,10 +27,11 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 
 - `A` / `D` or Left / Right: move
 - `SPACE`: jump (the original controller allows one air jump)
+- Left mouse button, Left Ctrl, or controller A: fire horizontally in the direction the player faces
 - `R`: generate a new seed and respawn
 - `F5`: regenerate the current seed and respawn deterministically
 - `O`: toggle terrain outlines
 - `C`: toggle the player collider and ground-normal debug view
 - `ESC`: exit
 
-The game uses a 50 Hz renderer-independent player simulation and a horizontally following camera.
+The game uses a 50 Hz renderer-independent player/projectile simulation and a horizontally following camera. Yellow diamonds and the short yellow line are temporary projectile and fixed-aim debug rendering.
