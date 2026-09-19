@@ -1,0 +1,36 @@
+# .NET build output
+bin/
+obj/
+artifacts/
+
+# Local dependency and CLI caches
+.nuget/
+.dotnet-cli-home/
+
+# User-specific IDE files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+.idea/
+
+# MonoGame content build output
+*.mgcontent
+*.xnb
+
+# Test and coverage output
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*~
