@@ -22,3 +22,15 @@ dotnet build BirdHell.sln
 ```sh
 dotnet run --project src/BirdHell/BirdHell.csproj
 ```
+
+## Controls
+
+- `A` / `D` or Left / Right: move
+- `SPACE`: jump (the original controller allows one air jump)
+- `R`: generate a new seed and respawn
+- `F5`: regenerate the current seed and respawn deterministically
+- `O`: toggle terrain outlines
+- `C`: toggle the player collider and ground-normal debug view
+- `ESC`: exit
+
+The game uses a 50 Hz renderer-independent player simulation and a horizontally following camera.
