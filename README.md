@@ -27,6 +27,7 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 
 - `A` / `D` or Left / Right: move
 - `SPACE`: jump (the original controller allows one air jump)
+- `S` or Down: crouch animation only (movement, physics, and collider are unchanged)
 - Left mouse button, Left Ctrl, or controller A: fire horizontally in the direction the player faces
 - `R`: start a fresh run with a new cave seed (the standalone production replacement for Unity's Start/`Escape` regeneration)
 - `F5`: debug extension that restarts the run with the exact current seed
@@ -37,9 +38,9 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 
 The game uses a 50 Hz renderer-independent player/projectile/enemy simulation. Its logical 2D camera starts at `(0,0)` and, once per fixed step, lerps toward `player position + (0,1)` by exactly `0.15`. The view always spans 10 world units vertically; viewport aspect determines the horizontal span. There is no clamp, dead zone, or look-ahead, so horizontal and vertical movement remain smooth even beyond cave edges.
 
-Yellow diamonds are temporary projectile rendering; orange starbursts are flying enemies. The `C` debug view also shows a short yellow line from the weapon muzzle in the fixed horizontal aim/facing direction. The window title shows player health, living enemy count, player death, and `ALL BIRDS DEAD`.
+The original Adventurer, eagle, sword/slash, and Sunnyland background sprites now provide production presentation. The player switches deterministically among idle, run, jump, second-jump roll, crouch, and non-looping attack animations; birds and projectiles loop their original frames. The `C` debug view remains separate and shows collision plus a short yellow line from the weapon muzzle in the fixed horizontal aim/facing direction. The window title shows player health, living enemy count, player death, and `ALL BIRDS DEAD`.
 
-The presentation foundation uses a point-sampled SpriteBatch layer for future approved sprites and a generated one-pixel, screen-attached backdrop that remains fixed while the camera moves. Terrain, player, enemies, projectiles, and debug views remain primitive world-space rendering. No Unity/Sunnyland image, sprite, animation, or audio asset has been copied: provenance and redistribution rights are unresolved, so sprite, audio, and effect replacement work is deferred.
+Filtering follows the active Unity importers per asset: eagles and the background are point sampled, while the player and sword/slash use bilinear filtering inherited from Unity’s Sprite default. Sprite dimensions preserve Unity’s 100-pixels-per-unit settings and object scales without changing authoritative gameplay colliders: the player is approximately `2.0 × 1.48` world units and an eagle is approximately `1.2 × 1.23`. The oversized `38.4 × 24` background is attached to the camera at the original `(-2.66,-5)` local offset, with no parallax, tiling, or dynamic viewport stretch. Cave terrain still uses primitive geometry and debug overlays draw last. Impact/death effects, audio, exact red damage-flash parity, and other effect work remain deferred.
 
 ## Procedural run lifecycle
 

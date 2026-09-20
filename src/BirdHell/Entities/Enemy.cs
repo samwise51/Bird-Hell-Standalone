@@ -37,6 +37,13 @@ public sealed class Enemy : IDamageable
     public int SuccessfulRepathCount { get; set; }
     public Vector2 SteeringTarget { get; set; }
 
+    public void UpdateFacingFromHorizontalMovement(float horizontalVelocity)
+    {
+        if (!float.IsFinite(horizontalVelocity)) throw new ArgumentOutOfRangeException(nameof(horizontalVelocity));
+        if (horizontalVelocity >= 0.01f) FacingDirection = 1;
+        else if (horizontalVelocity <= -0.01f) FacingDirection = -1;
+    }
+
     public void TakeDamage(int damage)
     {
         if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));

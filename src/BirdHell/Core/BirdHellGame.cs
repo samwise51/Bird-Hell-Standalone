@@ -14,6 +14,7 @@ public sealed class BirdHellGame : Game
     private readonly GraphicsDeviceManager _graphics;
     private readonly Camera2D _camera = new();
     private readonly DebugPresentationSettings _debug = new();
+    private readonly WorldAnimationState _animations = new();
     private BasicEffect? _effect;
     private SpritePresentation? _spritePresentation;
     private MainScreenRun? _run;
@@ -61,7 +62,10 @@ public sealed class BirdHellGame : Game
 
     protected override void LoadContent()
     {
-        _spritePresentation = new SpritePresentation(GraphicsDevice);
+        var contentRoot = Path.Combine(AppContext.BaseDirectory, Content.RootDirectory);
+        _spritePresentation = new SpritePresentation(
+            GraphicsDevice,
+            contentRoot);
         _effect = new BasicEffect(GraphicsDevice)
         {
             VertexColorEnabled = true,
@@ -142,9 +146,16 @@ public sealed class BirdHellGame : Game
             // Explicit presentation order: background, terrain, world entities, player,
             // foreground projectiles/effects, then debug overlays.
             DrawCaveGeometry(_effect);
-            DrawEnemies(_effect);
-            DrawPlayer(_run.Player, _effect);
-            DrawProjectiles(_effect);
+            if (_spritePresentation is not null)
+            {
+                _spritePresentation.BeginWorldSprites(_camera, BirdHellVisuals.Enemy.Frames[0].Region.Filter);
+                DrawEnemies(_spritePresentation);
+                _spritePresentation.EndWorldSprites();
+                _spritePresentation.BeginWorldSprites(_camera, BirdHellVisuals.PlayerIdle.Frames[0].Region.Filter);
+                DrawPlayer(_spritePresentation);
+                DrawProjectiles(_spritePresentation);
+                _spritePresentation.EndWorldSprites();
+            }
             DrawDebugOverlays(_effect);
         }
         base.Draw(gameTime);
@@ -165,6 +176,9 @@ public sealed class BirdHellGame : Game
         _simulationAccumulator = 0d;
         _pendingJump = false;
         _pendingFire = false;
+        var keyboard = Keyboard.GetState();
+        _animations.Reset(CreatePlayerVisualSnapshot(
+            keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down)));
         BuildRenderData(_run.Geometry);
         UpdateWindowTitle();
     }
@@ -226,37 +240,15 @@ public sealed class BirdHellGame : Game
         }
     }
 
-    private void DrawPlayer(Player player, BasicEffect effect)
+    private void DrawPlayer(SpritePresentation sprites)
     {
-        var center = player.ColliderCenter;
-        var polygon = BuildPlayerPolygon(player);
-
-        var playerColor = !player.IsAlive ? new Color(80, 80, 90) :
-            player.DamageFlashTime > 0f ? Color.White : new Color(72, 210, 255);
-        var vertices = new VertexPositionColor[polygon.Count + 1];
-        vertices[0] = new VertexPositionColor(new Vector3(center.X, center.Y, -0.2f), playerColor);
-        for (var i = 0; i < polygon.Count; i++)
-            vertices[i + 1] = new VertexPositionColor(new Vector3(polygon[i], -0.2f), playerColor);
-        var indices = new int[polygon.Count * 3];
-        for (var i = 0; i < polygon.Count; i++)
-        {
-            indices[i * 3] = 0;
-            indices[i * 3 + 1] = i + 1;
-            indices[i * 3 + 2] = (i + 1) % polygon.Count + 1;
-        }
-
-        foreach (var pass in effect.CurrentTechnique.Passes)
-        {
-            pass.Apply();
-            GraphicsDevice.DrawUserIndexedPrimitives(
-                PrimitiveType.TriangleList,
-                vertices,
-                0,
-                vertices.Length,
-                indices,
-                0,
-                indices.Length / 3);
-        }
+        if (_run is null || !_animations.Player.ShouldRender || _run.State == RunState.PlayerDead) return;
+        var player = _run.Player;
+        sprites.Draw(
+            _animations.Player.Playback.CurrentFrame,
+            player.Position,
+            PlayerAnimationState.FlipForFacing(player.FacingDirection),
+            player.DamageFlashTime > 0f ? Color.White : Color.White);
     }
 
     private static IReadOnlyList<Microsoft.Xna.Framework.Vector2> BuildPlayerPolygon(Player player)
@@ -288,48 +280,43 @@ public sealed class BirdHellGame : Game
         var horizontal = 0f;
         if (keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left)) horizontal -= 1f;
         if (keyboardState.IsKeyDown(Keys.D) || keyboardState.IsKeyDown(Keys.Right)) horizontal += 1f;
-        _run.Step(
+        var shotsBefore = _run.WeaponState.ShotsFired;
+        var stepResult = _run.Step(
             new PlayerInput(horizontal, _pendingJump, keyboardState.IsKeyDown(Keys.Space)),
             _pendingFire,
             SimulationStep);
+        var crouchHeld = keyboardState.IsKeyDown(Keys.S) || keyboardState.IsKeyDown(Keys.Down);
+        _animations.Player.Update(
+            CreatePlayerVisualSnapshot(crouchHeld),
+            _run.WeaponState.ShotsFired > shotsBefore,
+            stepResult.SecondJumpPerformed,
+            SimulationStep);
+        _animations.AdvanceEnemies(SimulationStep);
         _camera.Step(_run.Player.Position);
         if (_displayedHealth != _run.Player.Health || _displayedEnemyCount != _run.Enemies.LivingCount ||
             _displayedAllEnemiesDead != _run.Enemies.AllEnemiesDead)
             UpdateWindowTitle();
     }
 
-    private void DrawEnemies(BasicEffect effect)
+    private PlayerVisualSnapshot CreatePlayerVisualSnapshot(bool crouchHeld)
     {
-        const int steps = 16;
+        if (_run is null) return default;
+        return new PlayerVisualSnapshot(
+            _run.Player.IsAlive,
+            _run.Player.IsGrounded,
+            crouchHeld,
+            _run.Player.Velocity.X);
+    }
+
+    private void DrawEnemies(SpritePresentation sprites)
+    {
         if (_run is null) return;
         foreach (var enemy in _run.Enemies.LivingEnemies)
-        {
-            var center = enemy.ColliderCenter;
-            var color = enemy.DamageFlashTime > 0f ? Color.White : new Color(255, 104, 64);
-            var vertices = new VertexPositionColor[steps + 1];
-            vertices[0] = new VertexPositionColor(new Vector3(center.X, center.Y, -0.25f), color);
-            for (var index = 0; index < steps; index++)
-            {
-                var angle = index * MathF.Tau / steps;
-                var radius = enemy.ColliderRadius * (index % 2 == 0 ? 1f : 0.82f);
-                vertices[index + 1] = new VertexPositionColor(
-                    new Vector3(center.X + MathF.Cos(angle) * radius, center.Y + MathF.Sin(angle) * radius, -0.25f),
-                    color);
-            }
-            var indices = new int[steps * 3];
-            for (var index = 0; index < steps; index++)
-            {
-                indices[index * 3] = 0;
-                indices[index * 3 + 1] = index + 1;
-                indices[index * 3 + 2] = (index + 1) % steps + 1;
-            }
-            foreach (var pass in effect.CurrentTechnique.Passes)
-            {
-                pass.Apply();
-                GraphicsDevice.DrawUserIndexedPrimitives(
-                    PrimitiveType.TriangleList, vertices, 0, vertices.Length, indices, 0, indices.Length / 3);
-            }
-        }
+            sprites.Draw(
+                _animations.Enemy.CurrentFrame,
+                enemy.Position,
+                WorldAnimationState.EnemyFlip(enemy.FacingDirection),
+                enemy.DamageFlashTime > 0f ? Color.White : Color.White);
     }
 
     private void DrawNavigationDebug(BasicEffect effect)
@@ -370,35 +357,17 @@ public sealed class BirdHellGame : Game
         }
     }
 
-    private void DrawProjectiles(BasicEffect effect)
+    private void DrawProjectiles(SpritePresentation sprites)
     {
         if (_run is null) return;
-        var projectileVertices = new List<VertexPositionColor>();
-        var projectileIndices = new List<int>();
-        const float debugRadius = 0.12f;
         foreach (var projectile in _run.Projectiles.Projectiles)
         {
-            var center = projectile.ColliderCenter;
-            var start = projectileVertices.Count;
-            projectileVertices.Add(new VertexPositionColor(new Vector3(center.X, center.Y + debugRadius, -0.4f), Color.Yellow));
-            projectileVertices.Add(new VertexPositionColor(new Vector3(center.X + debugRadius, center.Y, -0.4f), Color.Yellow));
-            projectileVertices.Add(new VertexPositionColor(new Vector3(center.X, center.Y - debugRadius, -0.4f), Color.Yellow));
-            projectileVertices.Add(new VertexPositionColor(new Vector3(center.X - debugRadius, center.Y, -0.4f), Color.Yellow));
-            projectileIndices.AddRange([start, start + 1, start + 2, start, start + 2, start + 3]);
-        }
-
-        foreach (var pass in effect.CurrentTechnique.Passes)
-        {
-            pass.Apply();
-            if (projectileIndices.Count > 0)
-                GraphicsDevice.DrawUserIndexedPrimitives(
-                    PrimitiveType.TriangleList,
-                    projectileVertices.ToArray(),
-                    0,
-                    projectileVertices.Count,
-                    projectileIndices.ToArray(),
-                    0,
-                    projectileIndices.Count / 3);
+            var frameIndex = WorldAnimationState.ProjectileFrame(projectile.Age);
+            sprites.Draw(
+                BirdHellVisuals.Projectile.Frames[frameIndex],
+                projectile.Position,
+                WorldAnimationState.ProjectileFlip(projectile.Direction.X),
+                Color.White);
         }
     }
 
@@ -484,6 +453,6 @@ public sealed class BirdHellGame : Game
             _ => " - PLAYING",
         };
         Window.Title = $"Bird Hell - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state} - " +
-                       $"A/D move, SPACE jump, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, ESC exit - Seed: {_run.Seed}";
+                       $"A/D move, SPACE jump, S/Down crouch, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, ESC exit - Seed: {_run.Seed}";
     }
 }

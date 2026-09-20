@@ -31,13 +31,22 @@ Assert(falling.IsGrounded, "Player did not become grounded on floor.");
 Assert(MathF.Abs((falling.Position.Y + collider.BottomOffset) - TerrainCollisionSystem.Skin) < 0.05f, "Player did not settle on floor.");
 Console.WriteLine("PASS: player settles on a floor and becomes grounded");
 
-floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
-Assert(!falling.IsGrounded && falling.Velocity.Y > 0f && falling.JumpsUsed == 1, "Grounded jump did not launch player.");
-floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
-Assert(falling.JumpsUsed == 2, "Original second jump was not available.");
+var firstJumpResult = floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
+Assert(!falling.IsGrounded && falling.Velocity.Y > 0f && falling.JumpsUsed == 1 &&
+       firstJumpResult.JumpPerformed && firstJumpResult.JumpNumber == 1 && !firstJumpResult.SecondJumpPerformed,
+    "Grounded jump did not launch player or report jump one.");
+var firstJumpVelocity = falling.Velocity.Y;
+var secondJumpResult = floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
+Assert(falling.JumpsUsed == 2 && secondJumpResult.SecondJumpPerformed &&
+       MathF.Abs(falling.Velocity.Y - firstJumpVelocity) < 0.00001f,
+    "Original second jump availability, accepted event, or unchanged jump physics failed.");
 var velocityBeforeThirdJump = falling.Velocity.Y;
-floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
-Assert(falling.JumpsUsed == 2 && falling.Velocity.Y < velocityBeforeThirdJump, "Player jumped more than the original two-jump limit.");
+var failedThirdJumpResult = floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
+Assert(falling.JumpsUsed == 2 && falling.Velocity.Y < velocityBeforeThirdJump && !failedThirdJumpResult.JumpPerformed,
+    "Player jumped more than the original two-jump limit or reported a rejected jump as accepted.");
+var walkedOffResult = emptyMovement.Step(new Player(new Vector2(0f, 5f), collider), default, step);
+Assert(!walkedOffResult.JumpPerformed && !walkedOffResult.SecondJumpPerformed,
+    "Ordinary airborne/falling movement emitted a jump event.");
 Console.WriteLine("PASS: grounded jump and original two-jump limit work");
 
 var wallSegments = new[]

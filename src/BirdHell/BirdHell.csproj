@@ -11,4 +11,10 @@
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.5.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Content/Sprites/**/*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

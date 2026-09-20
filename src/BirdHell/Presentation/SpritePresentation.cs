@@ -1,5 +1,4 @@
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace BirdHell.Presentation;
@@ -7,17 +6,23 @@ namespace BirdHell.Presentation;
 /// <summary>SpriteBatch presentation entry points for screen-attached and future world-space sprites.</summary>
 public sealed class SpritePresentation : IDisposable
 {
-    private static readonly Color BackdropColor = new(18, 27, 43);
     private readonly GraphicsDevice _graphicsDevice;
     private readonly SpriteBatch _spriteBatch;
-    private readonly Texture2D _generatedBackdrop;
+    private readonly Dictionary<string, Texture2D> _textures = new(StringComparer.Ordinal);
+    private SpriteTextureFilter? _activeWorldFilter;
 
-    public SpritePresentation(GraphicsDevice graphicsDevice)
+    public SpritePresentation(GraphicsDevice graphicsDevice, string contentRoot)
     {
         _graphicsDevice = graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice));
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
         _spriteBatch = new SpriteBatch(graphicsDevice);
-        _generatedBackdrop = new Texture2D(graphicsDevice, 1, 1);
-        _generatedBackdrop.SetData([BackdropColor]);
+        var requiredTextures = BirdHellVisuals.PlayerIdle.Frames
+            .Concat(BirdHellVisuals.Enemy.Frames)
+            .Concat(BirdHellVisuals.Projectile.Frames)
+            .Select(frame => frame.Region.TextureId)
+            .Append(BirdHellVisuals.BackgroundTexture)
+            .Distinct(StringComparer.Ordinal);
+        foreach (var textureId in requiredTextures) _textures.Add(textureId, LoadRequiredTexture(contentRoot, textureId));
     }
 
     public void DrawBackground()
@@ -25,28 +30,73 @@ public sealed class SpritePresentation : IDisposable
         var viewport = _graphicsDevice.Viewport;
         _spriteBatch.Begin(
             SpriteSortMode.Deferred,
-            BlendState.Opaque,
-            SamplerState.PointClamp,
+            BlendState.AlphaBlend,
+            BirdHellVisuals.BackgroundFilter == SpriteTextureFilter.Point
+                ? SamplerState.PointClamp
+                : SamplerState.LinearClamp,
             DepthStencilState.None,
             RasterizerState.CullNone);
-        _spriteBatch.Draw(_generatedBackdrop, viewport.Bounds, Color.White);
+        var pixelsPerWorldUnit = viewport.Height / Camera2D.VerticalViewSpan;
+        var size = BirdHellVisuals.BackgroundWorldSize * pixelsPerWorldUnit;
+        var center = new Vector2(
+            viewport.Width / 2f + BirdHellVisuals.BackgroundLocalPosition.X * pixelsPerWorldUnit,
+            viewport.Height / 2f - BirdHellVisuals.BackgroundLocalPosition.Y * pixelsPerWorldUnit);
+        var destination = new Rectangle(
+            (int)MathF.Round(center.X - size.X / 2f),
+            (int)MathF.Round(center.Y - size.Y / 2f),
+            (int)MathF.Round(size.X),
+            (int)MathF.Round(size.Y));
+        _spriteBatch.Draw(_textures[BirdHellVisuals.BackgroundTexture], destination, Color.White);
         _spriteBatch.End();
     }
 
-    /// <summary>Begins a point-sampled world-space sprite layer using the same camera as primitive rendering.</summary>
-    public void BeginWorldSprites(Camera2D camera)
+    /// <summary>Begins a per-asset-filtered world sprite layer using the primitive-rendering camera.</summary>
+    public void BeginWorldSprites(Camera2D camera, SpriteTextureFilter filter)
     {
         ArgumentNullException.ThrowIfNull(camera);
+        _activeWorldFilter = filter;
         _spriteBatch.Begin(
             SpriteSortMode.Deferred,
             BlendState.AlphaBlend,
-            SamplerState.PointClamp,
+            filter == SpriteTextureFilter.Point ? SamplerState.PointClamp : SamplerState.LinearClamp,
             DepthStencilState.None,
             RasterizerState.CullNone,
             transformMatrix: CreateWorldTransform(camera, _graphicsDevice.Viewport));
     }
 
-    public void EndWorldSprites() => _spriteBatch.End();
+    public void EndWorldSprites()
+    {
+        _spriteBatch.End();
+        _activeWorldFilter = null;
+    }
+
+    public void Draw(SpriteFrame frame, System.Numerics.Vector2 worldPosition, SpriteFlip flip, Color tint)
+    {
+        var region = frame.Region;
+        if (_activeWorldFilter != region.Filter)
+            throw new InvalidOperationException(
+                $"Sprite '{region.TextureId}' requires {region.Filter} filtering but the active world layer uses {_activeWorldFilter?.ToString() ?? "none"}.");
+        var texture = _textures[region.TextureId];
+        var sourceY = region.CoordinateOrigin == PixelCoordinateOrigin.BottomLeft
+            ? texture.Height - region.Source.Y - region.Source.Height
+            : region.Source.Y;
+        var source = new Rectangle(region.Source.X, sourceY, region.Source.Width, region.Source.Height);
+        // SpriteBatch's local Y grows down, while the world transform makes Y grow up. Flipping
+        // texture coordinates vertically preserves the PNG orientation; Unity pivot Y can then be
+        // used directly. A signed X scale mirrors around the pivot, including bottom-left slashes.
+        var origin = new Vector2(region.Pivot.X * source.Width, region.Pivot.Y * source.Height);
+        var scale = region.WorldScale / region.PixelsPerUnit;
+        _spriteBatch.Draw(
+            texture,
+            new Vector2(worldPosition.X, worldPosition.Y),
+            source,
+            tint,
+            0f,
+            origin,
+            new Vector2(flip == SpriteFlip.Horizontal ? -scale : scale, scale),
+            SpriteEffects.FlipVertically,
+            0f);
+    }
 
     public static Matrix CreateWorldTransform(Camera2D camera, Viewport viewport)
     {
@@ -58,26 +108,27 @@ public sealed class SpritePresentation : IDisposable
                Matrix.CreateTranslation(viewport.Width / 2f, viewport.Height / 2f, 0f);
     }
 
-    public static T LoadRequired<T>(ContentManager content, string assetName) where T : class
+    private Texture2D LoadRequiredTexture(string contentRoot, string textureId)
     {
-        ArgumentNullException.ThrowIfNull(content);
-        ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
+        var path = Path.Combine(contentRoot, textureId.Replace('/', Path.DirectorySeparatorChar));
         try
         {
-            return content.Load<T>(assetName);
+            using var stream = File.OpenRead(path);
+            return Texture2D.FromStream(_graphicsDevice, stream);
         }
-        catch (ContentLoadException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
         {
             throw new InvalidOperationException(
-                $"Could not load required presentation asset '{assetName}' from content root '{content.RootDirectory}'. " +
-                "Confirm that the standalone-owned asset is included in the MonoGame content build.",
+                $"Could not load required presentation texture '{textureId}' at '{path}'. " +
+                "Confirm that the standalone-owned PNG is present and copied to the output Content directory.",
                 exception);
         }
     }
 
     public void Dispose()
     {
-        _generatedBackdrop.Dispose();
+        foreach (var texture in _textures.Values) texture.Dispose();
+        _textures.Clear();
         _spriteBatch.Dispose();
     }
 }

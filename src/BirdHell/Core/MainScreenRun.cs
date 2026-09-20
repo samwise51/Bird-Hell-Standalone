@@ -79,16 +79,19 @@ public sealed class MainScreenRun
         EnemyNavigation = enemyNavigation;
     }
 
-    public void Step(PlayerInput input, bool firePressed, float deltaTime)
+    public MainScreenStepResult Step(PlayerInput input, bool firePressed, float deltaTime)
     {
-        PlayerMovement.Step(Player, input, deltaTime);
+        var movementResult = PlayerMovement.Step(Player, input, deltaTime);
         var projectile = _weaponSystem.Fire(WeaponState, Player, firePressed);
         if (projectile is not null) Projectiles.Spawn(projectile);
         Projectiles.Step(deltaTime, Enemies.CreateProjectileTargets());
         EnemyNavigation.Step(Enemies.Enemies, Player.Position, deltaTime);
         _enemyCombat.Step(Enemies.Enemies, Player, deltaTime);
+        return new MainScreenStepResult(movementResult.SecondJumpPerformed);
     }
 
     public System.Numerics.Vector2 GetAimDirection() => _weaponSystem.GetAimDirection(Player);
     public System.Numerics.Vector2 GetMuzzlePosition() => _weaponSystem.GetMuzzlePosition(Player);
 }
+
+public readonly record struct MainScreenStepResult(bool SecondJumpPerformed);

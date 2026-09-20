@@ -43,14 +43,12 @@ public sealed class EnemyNavigationSystem
             enemy.Velocity = MoveTowards(enemy.Velocity, desiredVelocity, MaximumAcceleration * deltaTime);
             if (enemy.Velocity.LengthSquared() > enemy.MaximumSpeed * enemy.MaximumSpeed)
                 enemy.Velocity = Vector2.Normalize(enemy.Velocity) * enemy.MaximumSpeed;
-            if (desiredVelocity.X >= 0.01f) enemy.FacingDirection = 1;
-            else if (desiredVelocity.X <= -0.01f) enemy.FacingDirection = -1;
-
             var center = enemy.ColliderCenter;
             var velocity = enemy.Velocity;
             _terrain.MoveCircle(ref center, ref velocity, velocity * deltaTime, enemy.ColliderRadius);
             enemy.Position = center - enemy.ColliderOffset;
             enemy.Velocity = velocity;
+            enemy.UpdateFacingFromHorizontalMovement(enemy.Velocity.X);
         }
         SeparateEnemies(enemies);
     }

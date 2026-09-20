@@ -5,6 +5,11 @@ namespace BirdHell.Systems;
 
 public readonly record struct PlayerInput(float Horizontal, bool JumpPressed, bool JumpHeld);
 
+public readonly record struct PlayerMovementStepResult(bool JumpPerformed, int JumpNumber)
+{
+    public bool SecondJumpPerformed => JumpPerformed && JumpNumber == 2;
+}
+
 public sealed record PlayerMovementSettings
 {
     public float MovementSpeed { get; init; } = 8f;
@@ -26,7 +31,7 @@ public sealed class PlayerMovementSystem
         _settings = settings ?? new PlayerMovementSettings();
     }
 
-    public void Step(Player player, PlayerInput input, float deltaTime)
+    public PlayerMovementStepResult Step(Player player, PlayerInput input, float deltaTime)
     {
         ArgumentNullException.ThrowIfNull(player);
         if (!float.IsFinite(deltaTime) || deltaTime <= 0f || deltaTime > 0.1f)
@@ -35,8 +40,11 @@ public sealed class PlayerMovementSystem
         if (!player.IsAlive)
         {
             player.Velocity = Vector2.Zero;
-            return;
+            return default;
         }
+
+        var performedJump = false;
+        var performedJumpNumber = 0;
 
         _collision.RefreshContacts(player);
         if (player.IsGrounded)
@@ -61,6 +69,8 @@ public sealed class PlayerMovementSystem
         {
             player.Velocity = new Vector2(0f, _settings.JumpSpeed);
             player.JumpsUsed++;
+            performedJump = true;
+            performedJumpNumber = player.JumpsUsed;
             player.IsGrounded = false;
             player.IsJumping = true;
         }
@@ -79,5 +89,6 @@ public sealed class PlayerMovementSystem
             player.JumpsUsed = 0;
             player.IsJumping = false;
         }
+        return new PlayerMovementStepResult(performedJump, performedJumpNumber);
     }
 }

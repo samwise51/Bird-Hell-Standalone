@@ -274,6 +274,64 @@ The active `MainScreen` camera is orthographic with size `5`, giving a fixed 10-
 
 The explicit draw order is: generated background; cave terrain; enemy/world entity placeholders; player placeholder; projectile/foreground placeholders; terrain outline, collision/facing, and navigation debug overlays. Existing primitive gameplay/debug rendering remains world-aligned and debug lines draw last for visibility.
 
-No PNG, JPG, MP3, WAV, sprite sheet, animation, Sunnyland asset, or other Unity/third-party asset was copied. In particular, `Assets/Sunnyland/artwork/Environment/back.png` is not present. Original or replacement player/enemy/projectile/effect sprites, animation, audio/music, and final background work remain deferred until standalone-owned or otherwise approved content is available.
+Milestone 8 supersedes the temporary asset/placeholder statements above. The camera motion and framing remain unchanged; MonoGame renders the latest fixed-step camera state without adding render-time interpolation.
 
-Intentional presentation differences from Unity in this milestone are the generated solid-color backdrop and primitive gameplay placeholders. The camera motion and framing follow the audited active behavior; MonoGame renders the latest fixed-step camera state without adding render-time interpolation.
+## Original sprite presentation and animation
+
+### Imported visual assets
+
+The user explicitly approved importing the active original visual assets. Only these PNGs were copied; no `.meta`, Animator, animation, audio, effect, or unrelated Sunnyland content was imported:
+
+- `Assets/sprites/adventurer-v1.5-Sheet.png` → `src/BirdHell/Content/Sprites/Player/adventurer-v1.5-Sheet.png`
+- `Assets/sprites/eagle-attack-1.png` through `eagle-attack-4.png` → `src/BirdHell/Content/Sprites/Enemy/`
+- `Assets/sprites/sword-attack-animation.png` → `src/BirdHell/Content/Sprites/Projectile/sword-attack-animation.png`
+- `Assets/Sunnyland/artwork/Environment/back.png` → `src/BirdHell/Content/Sprites/Background/back.png`
+
+The project copies these standalone-owned content files beside the executable and loads them directly with `Texture2D.FromStream`. Every required texture is loaded at startup; failures identify both the deterministic texture ID and resolved file path and abort rather than silently restoring a primitive placeholder. Sampling follows the audited importer policy described below.
+
+### Renderer-independent sprite model
+
+`SpriteRegion` stores a texture ID, pixel rectangle and coordinate origin, Unity-normalized pivot, pixels per unit, object scale, and filter policy. `SpriteFrame`, `SpriteAnimationClip`, and `AnimationPlayback` store frame durations and looping behavior without requiring a graphics device. `BirdHellVisuals` contains the audited Bird Hell metadata. `PlayerAnimationState` and `WorldAnimationState` retain only clips, clocks, enums, and value snapshots; no player, enemy, projectile, or run reference survives a reset.
+
+Unity's 100 PPU semantics are retained. Player frames are `50 × 37` with root scale `4`, producing `2.0 × 1.48` world units. Eagle frames are `40 × 41` with root scale `3`, producing `1.2 × 1.23`. These are render dimensions only; no gameplay collider, projectile sweep, spawn, navigation, or physics value changed.
+
+### Animation metadata and repaired player policy
+
+- Idle uses atlas frames `0–3`, loops at effective `12 × 0.35 = 4.2 fps`.
+- Run uses `8–11`, loops at `12 fps`.
+- Jump uses `12–15`, loops at effective `60 × 0.2 = 12 fps`.
+- Roll/air-jump uses atlas frames `18,19,20,21,17` at 0.1 seconds per frame (10 fps), plays one non-looping 0.5-second cycle, and is triggered only by an accepted second jump.
+- Crouch uses `4–7`, loops at effective `12 × 0.5 = 6 fps`.
+- Attack uses `47,48,49,50,47`, is non-looping, and progresses at effective `60 × 1.5 = 90 fps`.
+- Eagles use the four separate attack images at `12 fps`, a roughly `0.333`-second loop.
+- Projectiles store the exact audited bottom-left Unity slices `_0 (0,3,68,56)`, `_1 (88,2,62,54)`, `_2 (171,3,52,36)`, and `_4 (246,5,43,16)`. The renderer converts bottom-left source coordinates to MonoGame's top-left coordinates only at draw time. They loop at effective `12 × 1.5 = 18 fps`, about `0.222` seconds per cycle, with bottom-left pivots.
+
+The standalone intentionally repairs the defective Unity Animator graph. A shot starts or restarts Attack, which has highest priority and finishes after release. An actively playing accepted-second-jump Roll follows, then ordinary airborne Jump; a grounded player holding `S` or Down selects Crouch; horizontal speed strictly above `0.01` selects Run; and the remaining grounded state selects Idle. This does not reproduce Unity's unconditional Any State → Idle transition or its script bug that never made Jump visible. Crouch and Roll are presentation-only and change no movement, speed, physics, dimensions, jump count, or collider.
+
+#### Unwired air-jump artwork audit
+
+The checked-in Bird Hell project contains no roll/air-jump `.anim`, no roll Animator state, parameter, or transition, and no script call that activates such a state. Its active double-jump implementation only increments the jump counter and reapplies jump velocity. The active game therefore never displayed a roll.
+
+The already-imported Adventurer atlas does contain the authored spin sequence. Correlating its checked-in sprite IDs and artwork identifies frames `18,19,20,21,17`, with Unity bottom-left rectangles `(200,481,50,37)`, `(250,481,50,37)`, `(300,481,50,37)`, `(0,444,50,37)`, and `(150,481,50,37)`. The matching authored `playerAirJump` sequence for this exact atlas uses 0.1-second key spacing, a source clip sample rate of 60, Animator state speed 1, and looping playback. Because that clip/controller is not part of Bird Hell and the standalone requirement is one complete roll per accepted second jump, Bird Hell Standalone uses the exact sequence/key progression as a non-looping 0.5-second presentation clip.
+
+`PlayerMovementSystem.Step` returns a value-only `PlayerMovementStepResult` identifying whether a jump was accepted and its authoritative jump number. `MainScreenRun.Step` exposes only `SecondJumpPerformed` to the host. Presentation therefore starts Roll only for an actually executed jump number 2—not from Space input, generic airborne state, a rejected third jump, or walking off an edge. Landing, `R`, and `F5` clear Roll. Attack remains visually highest priority; if it interrupts Roll, the independent roll clock continues rather than restarting, then returns to Roll if still active or to Jump/grounded presentation after completion.
+
+Player, enemy, and projectile rendering use horizontal sprite flipping from existing authoritative facing/direction values. Rendering never flips collision geometry, FirePoint/muzzle logic, trajectories, or navigation. The player is omitted when `PlayerDead`; death artwork/effects remain deferred. Existing damage-flash timers are still read by sprite tint selection and retain the current white flash; exact original red/timer parity is deferred.
+
+### Host-test filtering and eagle-facing correction
+
+Unity 2019.4 importer metadata uses `filterMode: 0` (explicit Point) for all four eagle images and `back.png`. The player and projectile atlases use `filterMode: -1`, meaning they inherit Unity's Sprite texture default, Bilinear. Milestone 8 initially opened one `PointClamp` world SpriteBatch for every entity, incorrectly applying Point to player and projectile artwork. The corrected renderer uses a Point world layer for eagles and a LinearClamp world layer for player/projectiles; the screen-attached background remains Point. No mipmaps are used, matching every active importer.
+
+At 1280×720 the faithful 10-unit camera yields exactly 72 screen pixels per world unit. One source texel therefore covers 2.88 screen pixels for the scale-4 player, 2.16 for scale-3 eagles, 0.72 for scale-1 projectiles, and 7.2 for the scale-10 background. These are fractional ratios. World entity positions and the smoothed camera are not rounded; the background destination rectangle is rounded to integer pixels. Point sampling at fractional magnification makes uneven hard texel boundaries visible, which is expected for the explicitly Point-filtered eagle/background but was a mismatch for player/projectile. Dimensions, PPU, camera span, animation timing, and gameplay remain unchanged.
+
+The native eagle artwork faces left. Original `birdGFX.cs` used scale `(+3,3,3)` for left and `(-3,3,3)` for meaningful positive desired X, although its second comparison accidentally used `<= +0.01` rather than `<= -0.01`. The initial standalone mapping assumed the texture faced right, so `FacingDirection = +1` applied no mirror and displayed a left-facing bird. It also selected facing from desired velocity before acceleration/collision, allowing a path turn to flip presentation before actual movement reversed.
+
+The corrected mapping renders standalone right-facing state with horizontal mirroring and left-facing state unmirrored. `EnemyNavigationSystem` updates this presentation state from final post-collision horizontal velocity: `>= +0.01` faces right, `<= -0.01` faces left, and the dead band preserves the prior meaningful direction. This does not face toward the player directly and does not mutate pathfinding, target selection, acceleration, speed, collision, separation, combat, velocity, or path state.
+
+### Background, ordering, and reset
+
+`back.png` is screen/camera attached at local offset `(-2.66,-5)` with original scale `10`, for an effective `38.4 × 24` world-unit image. It is oversized rather than stretched to each viewport, point sampled, untiled, and has no parallax at either 4:3 or 16:9.
+
+Draw order is background sprite, cave terrain, eagle sprites, player sprite, sword/slash projectile sprites, reserved future effects, then debug overlays. `O`, `C`, and `N` remain visible and functional; primitive player/enemy/projectile production shapes are gone. `R` and `F5` clear attack state, restart player/enemy clocks deterministically, and rely on ordinary current-key polling for crouch. Projectile animation derives from each authoritative projectile age, so clearing projectiles also clears every projectile visual without retaining entity references. Camera position remains untouched.
+
+Impact and enemy/player death effects, audio, and exact Unity damage-flash color/timer parity remain explicitly deferred.
