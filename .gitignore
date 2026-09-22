@@ -34,3 +34,13 @@ Thumbs.db
 *.log
 *.tmp
 *~
+
+# Milestone 9 local environment-art sources and extraction/QC artifacts
+/src/BirdHell/Content/Backgrounds/ExtractionTests/
+/src/BirdHell/Content/Backgrounds/alien_desert_asset_sheet*.png
+/src/BirdHell/Content/Backgrounds/bird hell v2 assets/
+/tools/clean_city_02_edges.py
+/tools/clean_environment_edges.py
+/tools/qc_individual_v2_assets.py
+/tools/qc_v2_runtime_assets.py
+/tools/stage_individual_v2_assets.py

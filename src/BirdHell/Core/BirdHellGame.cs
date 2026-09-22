@@ -15,8 +15,10 @@ public sealed class BirdHellGame : Game
     private readonly Camera2D _camera = new();
     private readonly DebugPresentationSettings _debug = new();
     private readonly WorldAnimationState _animations = new();
+    private readonly CloudAtmosphereState _atmosphere = new();
     private BasicEffect? _effect;
     private SpritePresentation? _spritePresentation;
+    private EnvironmentPresentation? _environmentPresentation;
     private MainScreenRun? _run;
     private VertexPositionColor[] _terrainVertices = [];
     private int[] _triangleIndices = [];
@@ -66,6 +68,9 @@ public sealed class BirdHellGame : Game
         _spritePresentation = new SpritePresentation(
             GraphicsDevice,
             contentRoot);
+        _environmentPresentation = new EnvironmentPresentation(GraphicsDevice, contentRoot);
+        if (_run is not null)
+            _environmentPresentation.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
         _effect = new BasicEffect(GraphicsDevice)
         {
             VertexColorEnabled = true,
@@ -110,6 +115,13 @@ public sealed class BirdHellGame : Game
             _debug.ToggleNavigation();
             UpdateWindowTitle();
         }
+        if (WasPressed(keyboardState, Keys.V))
+        {
+            _atmosphere.ToggleVisibility();
+            UpdateWindowTitle();
+        }
+
+        _atmosphere.Advance(gameTime.ElapsedGameTime.TotalSeconds);
 
         if (!resetThisFrame)
         {
@@ -137,14 +149,20 @@ public sealed class BirdHellGame : Game
 
     protected override void Draw(GameTime gameTime)
     {
-        GraphicsDevice.Clear(new Color(10, 12, 16));
-        _spritePresentation?.DrawBackground();
+        GraphicsDevice.Clear(new Color(16, 23, 47));
+        _environmentPresentation?.DrawSky();
+        _environmentPresentation?.DrawClouds(_camera, _atmosphere);
+        _environmentPresentation?.DrawSceneryLayer(_camera, EnvironmentSceneryLayer.HugeMountains);
+        _environmentPresentation?.DrawSceneryLayer(_camera, EnvironmentSceneryLayer.DistantCities);
+        _environmentPresentation?.DrawSceneryLayer(_camera, EnvironmentSceneryLayer.Ruins);
+        _environmentPresentation?.DrawSceneryLayer(_camera, EnvironmentSceneryLayer.NearRocks);
+        _environmentPresentation?.DrawSceneryLayer(_camera, EnvironmentSceneryLayer.RarePlants);
         if (_run is not null && _effect is not null)
         {
             ConfigureCamera(_effect);
 
-            // Explicit presentation order: background, terrain, world entities, player,
-            // foreground projectiles/effects, then debug overlays.
+            // Distant background and clouds were drawn first. Terrain, entities, player,
+            // projectiles/future effects, and debug overlays follow in documented order.
             DrawCaveGeometry(_effect);
             if (_spritePresentation is not null)
             {
@@ -163,6 +181,7 @@ public sealed class BirdHellGame : Game
 
     protected override void UnloadContent()
     {
+        _environmentPresentation?.Dispose();
         _spritePresentation?.Dispose();
         _effect?.Dispose();
     }
@@ -176,6 +195,8 @@ public sealed class BirdHellGame : Game
         _simulationAccumulator = 0d;
         _pendingJump = false;
         _pendingFire = false;
+        _atmosphere.OnGameplayReset();
+        _environmentPresentation?.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
         var keyboard = Keyboard.GetState();
         _animations.Reset(CreatePlayerVisualSnapshot(
             keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down)));
@@ -453,6 +474,6 @@ public sealed class BirdHellGame : Game
             _ => " - PLAYING",
         };
         Window.Title = $"Bird Hell - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state} - " +
-                       $"A/D move, SPACE jump, S/Down crouch, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, ESC exit - Seed: {_run.Seed}";
+                       $"A/D move, SPACE jump, S/Down crouch, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC exit - Seed: {_run.Seed}";
     }
 }

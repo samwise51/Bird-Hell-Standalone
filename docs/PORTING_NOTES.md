@@ -335,3 +335,43 @@ The corrected mapping renders standalone right-facing state with horizontal mirr
 Draw order is background sprite, cave terrain, eagle sprites, player sprite, sword/slash projectile sprites, reserved future effects, then debug overlays. `O`, `C`, and `N` remain visible and functional; primitive player/enemy/projectile production shapes are gone. `R` and `F5` clear attack state, restart player/enemy clocks deterministically, and rely on ordinary current-key polling for crouch. Projectile animation derives from each authoritative projectile age, so clearing projectiles also clears every projectile visual without retaining entity references. Camera position remains untouched.
 
 Impact and enemy/player death effects, audio, and exact Unity damage-flash color/timer parity remain explicitly deferred.
+
+## Standalone alien background and procedural atmosphere
+
+Milestone 9 intentionally diverges from Unity's camera-child Sunnyland background. The
+old imported file remains available for comparison, but `EnvironmentPresentation` now
+draws a generated blue-violet night gradient plus 16 approved transparent authored
+assets before terrain. `ParallaxLayerSettings` computes screen translation directly from
+the existing camera value, with independent X/Y factors, scale, world offset, screen
+offset, and filtering; `Camera2D` and its 10-unit vertical span are unchanged.
+
+`EnvironmentLayoutGenerator` uses stable versioned named sub-seeds for huge mountains,
+distant cities, ruins, near rocks, and rare plants. Mountains use continuous overlapping
+coverage and overscan; sparse layers use deterministic spacing, scale, opacity, and
+optional safe mirroring. Layout coordinates cover the cave camera range plus a 24-unit
+representative ultrawide span. Renderer culling avoids drawing offscreen instances. `F5`
+recreates the same static layout and `R` creates a different one without consuming cave,
+enemy, or gameplay random state. All decoration remains presentation-only.
+
+The cloud technique is CPU-generated periodic coherent value noise: anisotropic fBm
+creates broad horizontal forms, a low-frequency field domain-warps their edges, and a
+ridged detail term creates thin filaments. Four deterministic `512 × 256` alpha fields
+are generated once at startup from visual seed `0xA17E51D5`; no `Random` instance or
+gameplay seed is used. This is about 2 MiB of RGBA GPU texture data and roughly 524,000
+one-time output pixels. Runtime work is elapsed-time arithmetic plus one or two
+cross-faded tiled SpriteBatch layers; textures are never regenerated and the main loop
+allocates no atmosphere buffers. Default opacity is `0.17`, drift is `(0.018, 0.002)`
+texture periods/second, temporal evolution advances `0.025` phase/second, and cloud
+parallax is `(0.04, 0.015)`. `V` hides only cloud drawing.
+
+Atmospheric seed, elapsed presentation clock, and visibility are host presentation
+state. Both `R` and `F5` call the explicit no-op atmosphere reset hook, preserving the
+same sky while gameplay is atomically replaced. Logical render order is: night sky,
+clouds, huge mountains, distant cities, ruins, near rocks/plants, cave terrain, enemies,
+player, projectiles, reserved future effects, then debug overlays. Clouds therefore stay
+behind all authored scenery and every environment layer remains behind gameplay.
+
+Only `Backgrounds/{Mountains,Cities,Ruins,Rocks,Plants}/*.png` is packaged. Source sheets,
+generation inputs, V1 backups, staging copies, processing scripts, and extraction/QC
+previews remain available locally under ignored paths and are excluded from both runtime
+content and the Milestone 9 commit.

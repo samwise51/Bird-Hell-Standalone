@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace BirdHell.Presentation;
 
-/// <summary>SpriteBatch presentation entry points for screen-attached and future world-space sprites.</summary>
+/// <summary>SpriteBatch presentation entry points for filtered world-space gameplay sprites.</summary>
 public sealed class SpritePresentation : IDisposable
 {
     private readonly GraphicsDevice _graphicsDevice;
@@ -20,34 +20,8 @@ public sealed class SpritePresentation : IDisposable
             .Concat(BirdHellVisuals.Enemy.Frames)
             .Concat(BirdHellVisuals.Projectile.Frames)
             .Select(frame => frame.Region.TextureId)
-            .Append(BirdHellVisuals.BackgroundTexture)
             .Distinct(StringComparer.Ordinal);
         foreach (var textureId in requiredTextures) _textures.Add(textureId, LoadRequiredTexture(contentRoot, textureId));
-    }
-
-    public void DrawBackground()
-    {
-        var viewport = _graphicsDevice.Viewport;
-        _spriteBatch.Begin(
-            SpriteSortMode.Deferred,
-            BlendState.AlphaBlend,
-            BirdHellVisuals.BackgroundFilter == SpriteTextureFilter.Point
-                ? SamplerState.PointClamp
-                : SamplerState.LinearClamp,
-            DepthStencilState.None,
-            RasterizerState.CullNone);
-        var pixelsPerWorldUnit = viewport.Height / Camera2D.VerticalViewSpan;
-        var size = BirdHellVisuals.BackgroundWorldSize * pixelsPerWorldUnit;
-        var center = new Vector2(
-            viewport.Width / 2f + BirdHellVisuals.BackgroundLocalPosition.X * pixelsPerWorldUnit,
-            viewport.Height / 2f - BirdHellVisuals.BackgroundLocalPosition.Y * pixelsPerWorldUnit);
-        var destination = new Rectangle(
-            (int)MathF.Round(center.X - size.X / 2f),
-            (int)MathF.Round(center.Y - size.Y / 2f),
-            (int)MathF.Round(size.X),
-            (int)MathF.Round(size.Y));
-        _spriteBatch.Draw(_textures[BirdHellVisuals.BackgroundTexture], destination, Color.White);
-        _spriteBatch.End();
     }
 
     /// <summary>Begins a per-asset-filtered world sprite layer using the primitive-rendering camera.</summary>
