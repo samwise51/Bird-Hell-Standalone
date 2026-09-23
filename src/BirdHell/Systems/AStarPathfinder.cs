@@ -9,12 +9,16 @@ public sealed class AStarPathfinder
     private readonly NavigationGrid _grid;
 
     public AStarPathfinder(NavigationGrid grid) => _grid = grid ?? throw new ArgumentNullException(nameof(grid));
+    public NavigationGrid Grid => _grid;
 
     public IReadOnlyList<Vector2>? FindPath(Vector2 start, Vector2 end)
     {
+        if (!_grid.IsWorldPositionInTraversableSpace(start) || !_grid.IsWorldPositionInTraversableSpace(end))
+            return null;
         if (!_grid.TryFindNearestWalkable(start, MaximumNearestNodeDistance, out var startCell) ||
             !_grid.TryFindNearestWalkable(end, MaximumNearestNodeDistance, out var endCell))
             return null;
+        if (!_grid.AreConnected(startCell, endCell)) return null;
 
         var count = _grid.CellCount;
         var costs = Enumerable.Repeat(float.PositiveInfinity, count).ToArray();

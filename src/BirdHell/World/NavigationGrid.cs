@@ -11,6 +11,7 @@ public readonly record struct NavigationCell(int X, int Y)
 
 public sealed class NavigationGrid
 {
+    public const int NoComponent = -1;
     public const int DefaultWidth = 128;
     public const int DefaultHeight = 72;
     public const float DefaultNodeSize = 1f;
@@ -21,9 +22,23 @@ public sealed class NavigationGrid
         (1, 1), (1, -1), (-1, -1), (-1, 1),
     ];
     private readonly bool[] _walkable;
+    private readonly int[] _componentIds;
+    private readonly TerrainOccupancy? _terrainOccupancy;
 
     public NavigationGrid(CaveGeometry geometry)
-        : this(new TerrainCollisionSystem(geometry).Segments)
+        : this(new TerrainOccupancy(geometry))
+    {
+    }
+
+    public NavigationGrid(
+        TerrainOccupancy terrainOccupancy,
+        int width = DefaultWidth,
+        int height = DefaultHeight,
+        float nodeSize = DefaultNodeSize,
+        Vector2? center = null,
+        float scanRadius = OriginalObstacleScanRadius)
+        : this(terrainOccupancy?.BoundarySegments ?? throw new ArgumentNullException(nameof(terrainOccupancy)),
+            width, height, nodeSize, center, scanRadius, terrainOccupancy)
     {
     }
 
@@ -34,6 +49,18 @@ public sealed class NavigationGrid
         float nodeSize = DefaultNodeSize,
         Vector2? center = null,
         float scanRadius = OriginalObstacleScanRadius)
+        : this(obstacleSegments, width, height, nodeSize, center, scanRadius, null)
+    {
+    }
+
+    private NavigationGrid(
+        IEnumerable<TerrainSegment> obstacleSegments,
+        int width,
+        int height,
+        float nodeSize,
+        Vector2? center,
+        float scanRadius,
+        TerrainOccupancy? terrainOccupancy)
     {
         ArgumentNullException.ThrowIfNull(obstacleSegments);
         if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
@@ -46,6 +73,7 @@ public sealed class NavigationGrid
         Center = center ?? Vector2.Zero;
         Minimum = Center - new Vector2(width * nodeSize, height * nodeSize) / 2f;
         ScanRadius = scanRadius;
+        _terrainOccupancy = terrainOccupancy;
         _walkable = Enumerable.Repeat(true, width * height).ToArray();
         var segments = obstacleSegments.Where(segment => segment.A != segment.B).ToArray();
         var radiusSquared = scanRadius * scanRadius;
@@ -53,9 +81,14 @@ public sealed class NavigationGrid
         for (var x = 0; x < width; x++)
         {
             var point = CellToWorld(new NavigationCell(x, y));
-            if (segments.Any(segment => TerrainCollisionSystem.DistanceSquaredToSegment(point, segment) <= radiusSquared))
+            var blocked = terrainOccupancy is not null
+                ? !terrainOccupancy.HasClearance(point, scanRadius)
+                : segments.Any(segment => TerrainCollisionSystem.DistanceSquaredToSegment(point, segment) <= radiusSquared);
+            if (blocked)
                 _walkable[new NavigationCell(x, y).ToIndex(width)] = false;
         }
+        _componentIds = Enumerable.Repeat(NoComponent, width * height).ToArray();
+        BuildComponents();
     }
 
     public int Width { get; }
@@ -65,10 +98,22 @@ public sealed class NavigationGrid
     public Vector2 Minimum { get; }
     public float ScanRadius { get; }
     public int CellCount => Width * Height;
+    public int ComponentCount { get; private set; }
 
     public bool IsInBounds(NavigationCell cell) => cell.X >= 0 && cell.X < Width && cell.Y >= 0 && cell.Y < Height;
     public bool IsWalkable(NavigationCell cell) => IsInBounds(cell) && _walkable[cell.ToIndex(Width)];
     public bool IsWalkable(int x, int y) => IsWalkable(new NavigationCell(x, y));
+    public int GetComponentId(NavigationCell cell) =>
+        IsWalkable(cell) ? _componentIds[cell.ToIndex(Width)] : NoComponent;
+    public int GetComponentId(int x, int y) => GetComponentId(new NavigationCell(x, y));
+    public bool AreConnected(NavigationCell first, NavigationCell second)
+    {
+        var firstComponent = GetComponentId(first);
+        return firstComponent != NoComponent && firstComponent == GetComponentId(second);
+    }
+
+    public bool IsWorldPositionInTraversableSpace(Vector2 world) =>
+        _terrainOccupancy is null || _terrainOccupancy.IsTraversable(world);
     public Vector2 CellToWorld(NavigationCell cell)
     {
         if (!IsInBounds(cell)) throw new ArgumentOutOfRangeException(nameof(cell));
@@ -95,7 +140,50 @@ public sealed class NavigationGrid
     }
 
     public bool TryFindNearestWalkable(Vector2 world, float maximumDistance, out NavigationCell result)
+        => TryFindNearestWalkable(world, maximumDistance, null, out result);
+
+    public bool TryFindNearestWalkableInComponent(
+        Vector2 world,
+        float maximumDistance,
+        int componentId,
+        out NavigationCell result) =>
+        TryFindNearestWalkable(world, maximumDistance, componentId, out result);
+
+    public bool TryGetComponentForPosition(
+        Vector2 world,
+        float maximumDistance,
+        out int componentId,
+        out NavigationCell cell)
     {
+        if (!IsWorldPositionInTraversableSpace(world))
+        {
+            componentId = NoComponent;
+            cell = default;
+            return false;
+        }
+        if (TryFindNearestWalkable(world, maximumDistance, out cell))
+        {
+            componentId = GetComponentId(cell);
+            return true;
+        }
+        componentId = NoComponent;
+        return false;
+    }
+
+    private bool TryFindNearestWalkable(
+        Vector2 world,
+        float maximumDistance,
+        int? componentId,
+        out NavigationCell result)
+    {
+        if (!float.IsFinite(world.X) || !float.IsFinite(world.Y)) throw new ArgumentOutOfRangeException(nameof(world));
+        if (!float.IsFinite(maximumDistance) || maximumDistance < 0f)
+            throw new ArgumentOutOfRangeException(nameof(maximumDistance));
+        if (componentId is < 0 || componentId >= ComponentCount)
+        {
+            result = default;
+            return false;
+        }
         var maximumSquared = maximumDistance * maximumDistance;
         var bestDistance = float.PositiveInfinity;
         result = default;
@@ -105,6 +193,7 @@ public sealed class NavigationGrid
         {
             var cell = new NavigationCell(x, y);
             if (!IsWalkable(cell)) continue;
+            if (componentId.HasValue && GetComponentId(cell) != componentId.Value) continue;
             var distance = Vector2.DistanceSquared(world, CellToWorld(cell));
             if (distance > maximumSquared || distance >= bestDistance) continue;
             bestDistance = distance;
@@ -112,5 +201,30 @@ public sealed class NavigationGrid
             found = true;
         }
         return found;
+    }
+
+    private void BuildComponents()
+    {
+        for (var y = 0; y < Height; y++)
+        for (var x = 0; x < Width; x++)
+        {
+            var start = new NavigationCell(x, y);
+            if (!IsWalkable(start) || GetComponentId(start) != NoComponent) continue;
+            var queue = new Queue<NavigationCell>();
+            _componentIds[start.ToIndex(Width)] = ComponentCount;
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                foreach (var neighbor in GetNeighbors(current))
+                {
+                    var index = neighbor.ToIndex(Width);
+                    if (_componentIds[index] != NoComponent) continue;
+                    _componentIds[index] = ComponentCount;
+                    queue.Enqueue(neighbor);
+                }
+            }
+            ComponentCount++;
+        }
     }
 }

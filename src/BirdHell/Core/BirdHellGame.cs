@@ -12,6 +12,7 @@ namespace BirdHell.Core;
 public sealed class BirdHellGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
+    private readonly CaveGenerationProfileSelection _caveProfile;
     private readonly Camera2D _camera = new();
     private readonly DebugPresentationSettings _debug = new();
     private readonly WorldAnimationState _animations = new();
@@ -32,12 +33,14 @@ public sealed class BirdHellGame : Game
     private int _displayedHealth = -1;
     private int _displayedEnemyCount = -1;
     private bool _displayedAllEnemiesDead;
+    private float _navigationDiagnosticTitleTimer;
 
     private const float SimulationStep = 0.02f;
     private const double MaximumFrameTime = 0.1;
 
-    public BirdHellGame()
+    public BirdHellGame(CaveGenerationProfileSelection? caveProfile = null)
     {
+        _caveProfile = caveProfile ?? CaveGenerationProfiles.Default;
         _graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 1280,
@@ -54,7 +57,7 @@ public sealed class BirdHellGame : Game
     protected override void Initialize()
     {
         _graphics.ApplyChanges();
-        _run = new MainScreenRun(CaveGenerator.CreateRandomSeed());
+        _run = new MainScreenRun(CaveGenerator.CreateRandomSeed(), _caveProfile);
         CompleteHostReset();
         _previousKeyboardState = Keyboard.GetState();
         _previousMouseState = Mouse.GetState();
@@ -314,8 +317,11 @@ public sealed class BirdHellGame : Game
             SimulationStep);
         _animations.AdvanceEnemies(SimulationStep);
         _camera.Step(_run.Player.Position);
+        _navigationDiagnosticTitleTimer += SimulationStep;
         if (_displayedHealth != _run.Player.Health || _displayedEnemyCount != _run.Enemies.LivingCount ||
             _displayedAllEnemiesDead != _run.Enemies.AllEnemiesDead)
+            UpdateWindowTitle();
+        else if (_debug.ShowNavigation && _navigationDiagnosticTitleTimer >= 0.25f)
             UpdateWindowTitle();
     }
 
@@ -344,6 +350,7 @@ public sealed class BirdHellGame : Game
     {
         if (_run is null) return;
         var navigationGrid = _run.NavigationGrid;
+        var diagnostics = _run.EnemyNavigation.GetDiagnostics(_run.Enemies.Enemies, _run.Player.Position);
         var lines = new List<VertexPositionColor>();
         var blockedColor = new Color(170, 40, 210, 110);
         for (var y = 0; y < navigationGrid.Height; y += 2)
@@ -356,7 +363,27 @@ public sealed class BirdHellGame : Game
             lines.Add(new VertexPositionColor(new Vector3(center.X + 0.18f, center.Y, -0.45f), blockedColor));
         }
 
-        var selected = _run.Enemies.LivingEnemies.FirstOrDefault();
+        foreach (var item in diagnostics.Where(item =>
+                     item.StallDuration >= 0.5f || item.RecentlyCollidedWithTerrain))
+        {
+            var enemy = _run.Enemies.LivingEnemies.First(candidate => candidate.Id == item.EnemyId);
+            var center = enemy.ColliderCenter;
+            var color = item.StallDuration >= 0.5f ? Color.Red : Color.Orange;
+            lines.Add(new VertexPositionColor(new Vector3(center.X - 0.3f, center.Y - 0.3f, -0.48f), color));
+            lines.Add(new VertexPositionColor(new Vector3(center.X + 0.3f, center.Y + 0.3f, -0.48f), color));
+            lines.Add(new VertexPositionColor(new Vector3(center.X - 0.3f, center.Y + 0.3f, -0.48f), color));
+            lines.Add(new VertexPositionColor(new Vector3(center.X + 0.3f, center.Y - 0.3f, -0.48f), color));
+        }
+
+        var selectedDiagnostic = diagnostics
+            .OrderByDescending(item => item.StallDuration)
+            .ThenByDescending(item => item.RecentlyCollidedWithTerrain)
+            .ThenByDescending(item => item.NearbyEnemyCount)
+            .ThenBy(item => item.EnemyId)
+            .FirstOrDefault();
+        var selected = selectedDiagnostic is null
+            ? null
+            : _run.Enemies.LivingEnemies.First(enemy => enemy.Id == selectedDiagnostic.EnemyId);
         if (selected is not null)
         {
             for (var index = Math.Max(0, selected.PathIndex - 1); index < selected.Path.Count - 1; index++)
@@ -464,6 +491,7 @@ public sealed class BirdHellGame : Game
     private void UpdateWindowTitle()
     {
         if (_run is null) return;
+        _navigationDiagnosticTitleTimer = 0f;
         _displayedHealth = _run.Player.Health;
         _displayedEnemyCount = _run.Enemies.LivingCount;
         _displayedAllEnemiesDead = _run.Enemies.AllEnemiesDead;
@@ -473,7 +501,28 @@ public sealed class BirdHellGame : Game
             RunState.AllBirdsDead => " - ALL BIRDS DEAD",
             _ => " - PLAYING",
         };
-        Window.Title = $"Bird Hell - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state} - " +
+        var navigationDiagnostic = string.Empty;
+        if (_debug.ShowNavigation)
+        {
+            var item = _run.EnemyNavigation.GetDiagnostics(_run.Enemies.Enemies, _run.Player.Position)
+                .OrderByDescending(item => item.StallDuration)
+                .ThenByDescending(item => item.RecentlyCollidedWithTerrain)
+                .ThenByDescending(item => item.NearbyEnemyCount)
+                .ThenBy(item => item.EnemyId)
+                .FirstOrDefault();
+            if (item is not null)
+            {
+                var waypoint = item.CurrentWaypoint is { } target ? $"{target.X:F1},{target.Y:F1}" : "none";
+                navigationDiagnostic =
+                    $" - N bird {item.EnemyId} pos {item.Position.X:F1},{item.Position.Y:F1} " +
+                    $"vel {item.Velocity.X:F1},{item.Velocity.Y:F1} wp {waypoint} " +
+                    $"move {item.LastStepDistance:F3} progress {item.PlayerDistanceDelta:+0.000;-0.000;0.000} " +
+                    $"dist {item.PlayerDistance:F1} comp {item.NavigationComponentId} " +
+                    $"collision {(item.RecentlyCollidedWithTerrain ? "yes" : "no")} " +
+                    $"near {item.NearbyEnemyCount} stall {item.StallDuration:F1}s";
+            }
+        }
+        Window.Title = $"Bird Hell [{_run.CaveProfileName}] - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state}{navigationDiagnostic} - " +
                        $"A/D move, SPACE jump, S/Down crouch, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC exit - Seed: {_run.Seed}";
     }
 }

@@ -8,7 +8,100 @@ using BirdHell.World.Geometry;
 
 const float step = 0.02f;
 
+var omittedProfile = CaveProfileCommandLine.Parse([]);
+var explicitBaseline = CaveProfileCommandLine.Parse(["--cave-profile", "baseline"]);
+var conservativeProfile = CaveProfileCommandLine.Parse(["--cave-profile", "conservative-irregular"]);
+var denseProfile = CaveProfileCommandLine.Parse(["--cave-profile", "dense"]);
+var complexProfile = CaveProfileCommandLine.Parse(["--cave-profile", "complex"]);
+var extremeProfile = CaveProfileCommandLine.Parse(["--cave-profile", "extreme"]);
+Assert(omittedProfile.Profile == CaveGenerationProfile.Baseline && omittedProfile.Name == "baseline",
+    "Omitted cave-profile option did not select baseline.");
+Assert(explicitBaseline.Profile == CaveGenerationProfile.Baseline &&
+       explicitBaseline.Options == CaveGenerationProfiles.Baseline,
+    "Explicit baseline cave profile did not resolve to the baseline options.");
+AssertOptions(explicitBaseline.Options, 128, 30, 35, 5, 50, 50, 5);
+Assert(conservativeProfile.Profile == CaveGenerationProfile.ConservativeIrregular &&
+       conservativeProfile.Options == CaveGenerationProfiles.ConservativeIrregular,
+    "Conservative-irregular cave profile did not resolve to the experimental options.");
+AssertOptions(conservativeProfile.Options, 128, 30, 38, 4, 40, 50, 4);
+Assert(denseProfile.Profile == CaveGenerationProfile.Dense && denseProfile.Name == "dense" &&
+       denseProfile.Options == CaveGenerationProfiles.Dense,
+    "Dense cave profile did not resolve to its measured options.");
+Assert(complexProfile.Profile == CaveGenerationProfile.Complex && complexProfile.Name == "complex" &&
+       complexProfile.Options == CaveGenerationProfiles.Complex,
+    "Complex cave profile did not resolve to its measured options.");
+Assert(extremeProfile.Profile == CaveGenerationProfile.Extreme && extremeProfile.Name == "extreme" &&
+       extremeProfile.Options == CaveGenerationProfiles.Extreme,
+    "Extreme cave profile did not resolve to its measured options.");
+AssertOptions(denseProfile.Options, 128, 30, 42, 4, 40, 50, 4);
+AssertOptions(complexProfile.Options, 128, 30, 45, 3, 35, 50, 3);
+AssertOptions(extremeProfile.Options, 128, 30, 48, 3, 35, 50, 3);
+AssertThrowsWithProfileNames(() => CaveProfileCommandLine.Parse(["--cave-profile"]),
+    "Missing cave-profile value was accepted.");
+AssertThrowsWithProfileNames(() => CaveProfileCommandLine.Parse(["--cave-profile", "unknown"]),
+    "Unknown cave-profile value was accepted.");
+AssertThrows<ArgumentException>(() => CaveProfileCommandLine.Parse(
+        ["--cave-profile", "dense", "--cave-profile", "extreme"]),
+    "Duplicate cave-profile option was accepted.");
+Console.WriteLine("PASS: command-line cave profiles default, resolve, and reject invalid input exactly");
+
+const string profileComparisonSeed = "m10-smoke-0000";
+var baselineMap = new CaveGenerator(explicitBaseline.Options).Generate(profileComparisonSeed);
+var omittedMap = new CaveGenerator(omittedProfile.Options).Generate(profileComparisonSeed);
+var conservativeMap = new CaveGenerator(conservativeProfile.Options).Generate(profileComparisonSeed);
+var denseMap = new CaveGenerator(denseProfile.Options).Generate(profileComparisonSeed);
+var complexMap = new CaveGenerator(complexProfile.Options).Generate(profileComparisonSeed);
+var extremeMap = new CaveGenerator(extremeProfile.Options).Generate(profileComparisonSeed);
+Assert(MapFingerprint(omittedMap) == MapFingerprint(baselineMap),
+    "Omitted and explicit baseline selections produced different same-seed maps.");
+Assert(MapFingerprint(baselineMap) != MapFingerprint(conservativeMap),
+    "Representative same-seed maps did not differ across cave profiles.");
+Assert(new[] { denseMap, complexMap, extremeMap }.All(map => MapFingerprint(map) != MapFingerprint(baselineMap)),
+    "A Milestone 10G profile did not differ from baseline for the representative seed.");
+
+AssertCandidateProfileLifecycle(denseProfile, CaveGenerationProfile.Dense, profileComparisonSeed);
+AssertCandidateProfileLifecycle(complexProfile, CaveGenerationProfile.Complex, profileComparisonSeed);
+AssertCandidateProfileLifecycle(extremeProfile, CaveGenerationProfile.Extreme, profileComparisonSeed);
+Console.WriteLine("PASS: Milestone 10G profiles validate, repeat seed/profile with F5, and retain profile through R");
+
+var conservativeRun = new MainScreenRun(profileComparisonSeed, conservativeProfile);
+Assert(conservativeRun.CaveProfile.Profile == CaveGenerationProfile.ConservativeIrregular &&
+       conservativeRun.CaveProfileName == "conservative-irregular" &&
+       conservativeRun.State == RunState.Playing && conservativeRun.Player.IsGrounded &&
+       conservativeRun.Enemies.LivingCount == EnemySpawnSystem.OriginalEnemyCount,
+    "Conservative profile did not complete the validated player/enemy pipeline.");
+var conservativeSeed = conservativeRun.Seed;
+var conservativeGeometry = Fingerprint(conservativeRun.Geometry);
+var conservativePlayerSpawn = conservativeRun.PlayerSpawn;
+var conservativeEnemySpawn = conservativeRun.EnemySpawn.Placements.ToArray();
+conservativeRun.RestartSameSeed();
+Assert(conservativeRun.Seed == conservativeSeed &&
+       conservativeRun.CaveProfile.Profile == CaveGenerationProfile.ConservativeIrregular &&
+       Fingerprint(conservativeRun.Geometry) == conservativeGeometry &&
+       conservativeRun.PlayerSpawn == conservativePlayerSpawn &&
+       conservativeRun.EnemySpawn.Placements.SequenceEqual(conservativeEnemySpawn),
+    "Conservative F5 did not reproduce seed, profile, geometry, player spawn, enemy positions, and speeds.");
+var conservativeRetainedMap = conservativeRun.CaveMap;
+var conservativeRetainedPlayer = conservativeRun.Player;
+AssertThrows<PlayerSpawnException>(() => conservativeRun.StartRun(
+        "m10f-conservative-atomic-failure", new PlayerSpawnOptions { MinimumSupportWidth = 10_000f }),
+    "Conservative replacement with impossible spawn requirements did not fail.");
+Assert(conservativeRun.Seed == conservativeSeed &&
+       conservativeRun.CaveProfile.Profile == CaveGenerationProfile.ConservativeIrregular &&
+       ReferenceEquals(conservativeRun.CaveMap, conservativeRetainedMap) &&
+       ReferenceEquals(conservativeRun.Player, conservativeRetainedPlayer),
+    "Failed conservative replacement changed the published seed, profile, or world.");
+conservativeRun.StartNewRun();
+Assert(conservativeRun.Seed != conservativeSeed &&
+       conservativeRun.CaveProfile.Profile == CaveGenerationProfile.ConservativeIrregular &&
+       conservativeRun.State == RunState.Playing &&
+       conservativeRun.Enemies.LivingCount == EnemySpawnSystem.OriginalEnemyCount,
+    "Conservative R did not preserve the profile while installing a validated new-seed run.");
+Console.WriteLine("PASS: conservative profile differs from baseline, validates, repeats with F5, retains profile with R, and replaces atomically");
+
 var run = new MainScreenRun("milestone-6-initial");
+Assert(run.CaveProfile.Profile == CaveGenerationProfile.Baseline && run.CaveProfileName == "baseline",
+    "Legacy MainScreenRun construction no longer defaults to baseline.");
 Assert(run.State == RunState.Playing, "A new run did not start Playing.");
 Assert(run.Player.Health == 100 && run.Player.IsAlive, "A new run did not start with a live 100-health player.");
 Assert(run.Enemies.LivingCount == EnemySpawnSystem.OriginalEnemyCount, "A new run did not contain exactly 15 living enemies.");
@@ -84,12 +177,24 @@ run.Projectiles.Spawn(new Projectile(Vector2.Zero, Vector2.UnitX, 20f, 25, 0.34f
 var oldNavigation = run.NavigationGrid;
 var oldProjectileSystem = run.Projectiles;
 var sameSeed = run.Seed;
+var spawnSelectionBeforeReset = run.PlayerSpawn;
+var enemySpawnBeforeReset = run.EnemySpawn;
 var geometryFingerprint = Fingerprint(run.Geometry);
 var navigationDebugEnabled = true;
 
 run.RestartSameSeed();
 Assert(run.Seed == sameSeed, "F5/same-seed reset changed the seed.");
+Assert(run.CaveProfile.Profile == CaveGenerationProfile.Baseline,
+    "F5/same-seed reset changed the baseline cave profile.");
 Assert(Fingerprint(run.Geometry) == geometryFingerprint, "Same-seed reset did not reproduce cave geometry.");
+Assert(run.PlayerSpawn == spawnSelectionBeforeReset && run.Player.Position == spawnSelectionBeforeReset.Position &&
+       run.PlayerNavigationComponentId == spawnSelectionBeforeReset.NavigationComponentId,
+    "F5/same-seed reset did not reproduce the validated player spawn and navigation component.");
+Assert(run.EnemySpawn.Placements.SequenceEqual(enemySpawnBeforeReset.Placements) &&
+       run.Enemies.Enemies.Select(EnemySpawnState).SequenceEqual(
+           enemySpawnBeforeReset.Placements.Select(item =>
+               (item.EnemyId, item.Position, item.MaximumSpeed))),
+    "F5/same-seed reset did not reproduce enemy placement and speed assignment.");
 Assert(!ReferenceEquals(run.Player, oldPlayer) && run.Player.Health == 100 && run.Player.IsAlive,
     "Atomic reset retained the old player or failed to restore it.");
 Assert(run.Player.Velocity == Vector2.Zero && run.Player.FacingDirection == 1 && !run.Player.IsJumping && run.Player.JumpsUsed == 0 &&
@@ -113,10 +218,63 @@ Assert(selectedAfterReset is not null && !oldEnemies.Contains(selectedAfterReset
     "Dynamic debug selection retained an old enemy reference.");
 Console.WriteLine("PASS: same-seed atomic reset reproduces geometry and clears all player/weapon/projectile/enemy/navigation transients");
 
+var retainedSeed = run.Seed;
+var retainedMap = run.CaveMap;
+var retainedGeometry = run.Geometry;
+var retainedPlayer = run.Player;
+var retainedNavigation = run.NavigationGrid;
+var retainedSpawn = run.PlayerSpawn;
+PlayerSpawnException? spawnFailure = null;
+try
+{
+    run.StartRun("milestone-10c-explicit-failure", new PlayerSpawnOptions { MinimumSupportWidth = 10_000f });
+}
+catch (PlayerSpawnException exception)
+{
+    spawnFailure = exception;
+}
+Assert(spawnFailure is not null && spawnFailure.Failure.LandingCandidateCount > 0 &&
+       spawnFailure.Failure.RejectionCounts[PlayerSpawnRejectionReason.InsufficientSupportWidth] > 0,
+    "No-candidate run construction did not expose structured player-spawn failure.");
+Assert(run.Seed == retainedSeed && ReferenceEquals(run.CaveMap, retainedMap) &&
+       ReferenceEquals(run.Geometry, retainedGeometry) && ReferenceEquals(run.Player, retainedPlayer) &&
+       ReferenceEquals(run.NavigationGrid, retainedNavigation) && run.PlayerSpawn == retainedSpawn &&
+       run.CaveProfile.Profile == CaveGenerationProfile.Baseline,
+    "Failed replacement run corrupted the previously published atomic run.");
+Console.WriteLine("PASS: explicit no-candidate failure leaves the existing run atomically untouched");
+
+var retainedEnemySpawn = run.EnemySpawn;
+var retainedEnemies = run.Enemies;
+EnemySpawnException? enemySpawnFailure = null;
+try
+{
+    run.StartRun(
+        "milestone-10d-explicit-failure",
+        null,
+        new EnemySpawnOptions { CollisionSafetyMargin = 10_000f });
+}
+catch (EnemySpawnException exception)
+{
+    enemySpawnFailure = exception;
+}
+Assert(enemySpawnFailure is not null &&
+       enemySpawnFailure.Failure.Code is EnemySpawnFailureCode.NoCollisionSafeCandidates or
+           EnemySpawnFailureCode.InsufficientSeparatedCapacity &&
+       enemySpawnFailure.Failure.SelectedCount < EnemySpawnSystem.OriginalEnemyCount,
+    "Invalid enemy capacity did not expose structured failure.");
+Assert(run.Seed == retainedSeed && ReferenceEquals(run.CaveMap, retainedMap) &&
+       ReferenceEquals(run.Geometry, retainedGeometry) && ReferenceEquals(run.Player, retainedPlayer) &&
+       ReferenceEquals(run.NavigationGrid, retainedNavigation) && ReferenceEquals(run.Enemies, retainedEnemies) &&
+       ReferenceEquals(run.EnemySpawn, retainedEnemySpawn),
+    "Failed enemy replacement corrupted the previously published atomic run.");
+Console.WriteLine("PASS: explicit enemy-placement failure leaves the existing run atomically untouched");
+
 var seedBeforeNewRun = run.Seed;
 var navigationBeforeNewRun = run.NavigationGrid;
 run.StartNewRun();
 Assert(run.Seed != seedBeforeNewRun, "R/new-seed reset did not change the generated seed.");
+Assert(run.CaveProfile.Profile == CaveGenerationProfile.Baseline,
+    "R/new-seed reset changed the baseline cave profile.");
 Assert(run.State == RunState.Playing && run.Enemies.LivingCount == 15 && run.Player.Health == 100,
     "R/new-seed reset did not produce a complete Playing run.");
 Assert(!ReferenceEquals(run.NavigationGrid, navigationBeforeNewRun), "R/new-seed reset retained stale navigation.");
@@ -141,6 +299,102 @@ static string Fingerprint(CaveGeometry geometry) => string.Join('|',
     geometry.Vertices.Select(vertex => $"{vertex.X:R},{vertex.Y:R}")) + ":" +
     string.Join('|', geometry.Triangles.Select(triangle => $"{triangle.A},{triangle.B},{triangle.C}")) + ":" +
     string.Join('|', geometry.Outlines.Select(outline => string.Join(',', outline.VertexIndices)));
+
+static (int Id, Vector2 Position, int Speed) EnemySpawnState(Enemy enemy) =>
+    (enemy.Id, enemy.Position, enemy.MaximumSpeed);
+
+static string MapFingerprint(CaveMap map) => string.Join(',',
+    Enumerable.Range(0, map.Height).SelectMany(y =>
+        Enumerable.Range(0, map.Width).Select(x => (int)map[x, y])));
+
+static void AssertOptions(
+    CaveGenerationOptions options,
+    int width,
+    int height,
+    int fill,
+    int smoothing,
+    int wallThreshold,
+    int roomThreshold,
+    int passageRadius)
+{
+    Assert(options.Width == width && options.Height == height &&
+           options.RandomFillPercent == fill && options.SmoothingPasses == smoothing &&
+           options.WallRegionThreshold == wallThreshold && options.RoomRegionThreshold == roomThreshold &&
+           options.PassageRadius == passageRadius,
+        "Resolved cave-generation options do not match the named profile.");
+}
+
+static void AssertCandidateProfileLifecycle(
+    CaveGenerationProfileSelection selection,
+    CaveGenerationProfile expectedProfile,
+    string seed)
+{
+    var run = new MainScreenRun(seed, selection);
+    Assert(run.CaveProfile.Profile == expectedProfile && run.CaveProfileName == selection.Name &&
+           run.State == RunState.Playing && run.Player.IsGrounded &&
+           run.Enemies.LivingCount == EnemySpawnSystem.OriginalEnemyCount,
+        $"Profile {selection.Name} did not complete the validated player/enemy pipeline.");
+
+    var geometry = Fingerprint(run.Geometry);
+    var playerSpawn = run.PlayerSpawn;
+    var enemySpawn = run.EnemySpawn.Placements.ToArray();
+    run.RestartSameSeed();
+    Assert(run.Seed == seed && run.CaveProfile.Profile == expectedProfile &&
+           run.CaveProfileName == selection.Name && Fingerprint(run.Geometry) == geometry &&
+           run.PlayerSpawn == playerSpawn && run.EnemySpawn.Placements.SequenceEqual(enemySpawn),
+        $"Profile {selection.Name} F5 did not reproduce seed, profile, geometry, player spawn, and enemy placements/speeds.");
+
+    var retainedSeed = run.Seed;
+    var retainedMap = run.CaveMap;
+    var replacementFailed = false;
+    try
+    {
+        run.StartNewRun();
+    }
+    catch (InvalidOperationException)
+    {
+        replacementFailed = true;
+    }
+
+    Assert(run.CaveProfile.Profile == expectedProfile && run.CaveProfileName == selection.Name,
+        $"Profile {selection.Name} R changed the selected profile.");
+    if (replacementFailed)
+        Assert(run.Seed == retainedSeed && ReferenceEquals(run.CaveMap, retainedMap),
+            $"Profile {selection.Name} failed R corrupted the published seed or world.");
+    else
+        Assert(run.Seed != retainedSeed && run.State == RunState.Playing &&
+               run.Enemies.LivingCount == EnemySpawnSystem.OriginalEnemyCount,
+            $"Profile {selection.Name} successful R did not publish a validated new-seed run.");
+}
+
+static void AssertThrowsWithProfileNames(Action action, string message)
+{
+    try
+    {
+        action();
+    }
+    catch (ArgumentException exception)
+    {
+        foreach (var name in new[] { "baseline", "conservative-irregular", "dense", "complex", "extreme" })
+            Assert(exception.Message.Contains(name, StringComparison.Ordinal),
+                $"Cave-profile validation message omitted '{name}'.");
+        return;
+    }
+    throw new InvalidOperationException(message);
+}
+
+static void AssertThrows<TException>(Action action, string message) where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
+}
 
 static void AssertNavigationMatchesGeometry(NavigationGrid actual, CaveGeometry geometry)
 {

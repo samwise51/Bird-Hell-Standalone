@@ -10,12 +10,21 @@ public sealed class TerrainCollisionSystem
 {
     public const float Skin = 0.0025f;
     public const float GroundProbeDistance = 0.035f;
+    public const float MaximumWalkableSlopeDegrees = 45f;
+    public static float MinimumGroundNormalY => MathF.Cos(MaximumWalkableSlopeDegrees * MathF.PI / 180f);
     private const int ResolutionIterations = 8;
     private readonly TerrainSegment[] _segments;
+    private readonly TerrainOccupancy? _occupancy;
 
     public TerrainCollisionSystem(CaveGeometry geometry)
-        : this(geometry.Outlines.SelectMany(ToSegments))
+        : this(new TerrainOccupancy(geometry))
     {
+    }
+
+    public TerrainCollisionSystem(TerrainOccupancy occupancy)
+    {
+        _occupancy = occupancy ?? throw new ArgumentNullException(nameof(occupancy));
+        _segments = occupancy.BoundarySegments.Where(segment => segment.A != segment.B).ToArray();
     }
 
     public TerrainCollisionSystem(IEnumerable<TerrainSegment> segments)
@@ -45,14 +54,14 @@ public sealed class TerrainCollisionSystem
     public void RefreshContacts(Player player)
     {
         ArgumentNullException.ThrowIfNull(player);
-        var minimumGroundY = MathF.Cos(MathF.PI / 4f);
         var grounded = false;
         var bestNormal = Vector2.UnitY;
 
         foreach (var segment in _segments)
         {
             var contact = GetContact(player.Position, player.Collider, segment, Vector2.Zero);
-            if (contact.Distance > player.Collider.Radius + GroundProbeDistance || contact.Normal.Y < minimumGroundY) continue;
+            if (contact.Distance > player.Collider.Radius + GroundProbeDistance ||
+                contact.Normal.Y < MinimumGroundNormalY) continue;
             if (!grounded || contact.Normal.Y > bestNormal.Y)
             {
                 grounded = true;
@@ -66,6 +75,7 @@ public sealed class TerrainCollisionSystem
 
     public bool Intersects(Vector2 position, PlayerCollider collider, float tolerance = 0.0001f)
     {
+        if (_occupancy is not null && !_occupancy.IsTraversable(position + collider.Offset)) return true;
         foreach (var segment in _segments)
             if (GetContact(position, collider, segment, Vector2.Zero).Distance < collider.Radius - tolerance)
                 return true;
@@ -90,16 +100,17 @@ public sealed class TerrainCollisionSystem
     public bool IntersectsCircle(Vector2 center, float radius, float tolerance = 0.0001f)
     {
         if (radius < 0f || !float.IsFinite(radius)) throw new ArgumentOutOfRangeException(nameof(radius));
+        if (_occupancy is not null) return _occupancy.IntersectsCircle(center, radius, tolerance);
         return _segments.Any(segment => DistanceSquaredToSegment(center, segment) <
                                         (radius - tolerance) * (radius - tolerance));
     }
 
-    public void MoveCircle(ref Vector2 center, ref Vector2 velocity, Vector2 displacement, float radius)
+    public bool MoveCircle(ref Vector2 center, ref Vector2 velocity, Vector2 displacement, float radius)
     {
         if (!TrySweepCircle(center, displacement, radius, out var fraction))
         {
             center += displacement;
-            return;
+            return false;
         }
 
         var safeFraction = MathF.Max(0f, fraction - Skin / MathF.Max(displacement.Length(), Skin));
@@ -115,6 +126,7 @@ public sealed class TerrainCollisionSystem
         else normal = Vector2.Normalize(normal);
         var inward = Vector2.Dot(velocity, normal);
         if (inward < 0f) velocity -= normal * inward;
+        return true;
     }
 
     public static float DistanceSquaredToSegment(Vector2 point, TerrainSegment segment)
@@ -325,12 +337,5 @@ public sealed class TerrainCollisionSystem
         point2 = p2 + d2 * t;
     }
 
-    private static IEnumerable<TerrainSegment> ToSegments(CaveOutline outline)
-    {
-        for (var i = 0; i < outline.Points.Count - 1; i++)
-            yield return new TerrainSegment(ToVector(outline.Points[i]), ToVector(outline.Points[i + 1]));
-    }
-
-    private static Vector2 ToVector(CaveVertex point) => new(point.X, point.Y);
     private readonly record struct Contact(float Distance, Vector2 Normal);
 }

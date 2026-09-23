@@ -1,6 +1,7 @@
 using BirdHell.Entities;
 using BirdHell.Systems;
 using BirdHell.World;
+using BirdHell.World.Analysis;
 using BirdHell.World.Geometry;
 
 namespace BirdHell.Core;
@@ -8,25 +9,40 @@ namespace BirdHell.Core;
 /// <summary>Renderer-independent state and fixed-step lifecycle for the active procedural MainScreen.</summary>
 public sealed class MainScreenRun
 {
-    private readonly CaveGenerator _caveGenerator = new();
+    private readonly CaveGenerator _caveGenerator;
     private readonly CaveGeometryBuilder _geometryBuilder = new();
+    private readonly CaveTopologyAnalyzer _topologyAnalyzer = new();
     private readonly WeaponSystem _weaponSystem = new();
     private readonly EnemyCombatSystem _enemyCombat = new();
 
     public MainScreenRun(string seed)
+        : this(seed, CaveGenerationProfiles.Default)
     {
+    }
+
+    public MainScreenRun(string seed, CaveGenerationProfileSelection caveProfile)
+    {
+        CaveProfile = caveProfile ?? throw new ArgumentNullException(nameof(caveProfile));
+        _caveGenerator = new CaveGenerator(CaveProfile.Options);
         StartRun(seed);
     }
 
+    public CaveGenerationProfileSelection CaveProfile { get; }
+    public string CaveProfileName => CaveProfile.Name;
     public string Seed { get; private set; } = string.Empty;
     public CaveMap CaveMap { get; private set; } = null!;
     public CaveGeometry Geometry { get; private set; } = null!;
+    public TerrainOccupancy TerrainOccupancy { get; private set; } = null!;
     public TerrainCollisionSystem TerrainCollision { get; private set; } = null!;
     public PlayerMovementSystem PlayerMovement { get; private set; } = null!;
     public Player Player { get; private set; } = null!;
     public WeaponState WeaponState { get; private set; } = null!;
     public ProjectileSystem Projectiles { get; private set; } = null!;
     public NavigationGrid NavigationGrid { get; private set; } = null!;
+    public CaveTopologyReport TopologyReport { get; private set; } = null!;
+    public PlayerSpawnSelection PlayerSpawn { get; private set; } = null!;
+    public int PlayerNavigationComponentId => PlayerSpawn.NavigationComponentId;
+    public EnemySpawnSelection EnemySpawn { get; private set; } = null!;
     public EnemyPopulation Enemies { get; private set; } = null!;
     public EnemyNavigationSystem EnemyNavigation { get; private set; } = null!;
 
@@ -46,7 +62,14 @@ public sealed class MainScreenRun
 
     public void RestartSameSeed() => StartRun(Seed);
 
-    public void StartRun(string seed)
+    public void StartRun(string seed) => StartRun(seed, null, null);
+
+    public void StartRun(string seed, PlayerSpawnOptions? spawnOptions) => StartRun(seed, spawnOptions, null);
+
+    public void StartRun(
+        string seed,
+        PlayerSpawnOptions? spawnOptions,
+        EnemySpawnOptions? enemySpawnOptions)
     {
         ArgumentNullException.ThrowIfNull(seed);
 
@@ -54,14 +77,23 @@ public sealed class MainScreenRun
         // current run untouched, and no simulation step can observe partially-reset state.
         var caveMap = _caveGenerator.Generate(seed);
         var geometry = _geometryBuilder.Build(caveMap);
-        var terrain = new TerrainCollisionSystem(geometry);
+        var terrainOccupancy = new TerrainOccupancy(geometry);
+        var terrain = new TerrainCollisionSystem(terrainOccupancy);
         var movement = new PlayerMovementSystem(terrain);
-        var spawn = PlayerSpawnSystem.FindSafeSpawn(geometry, PlayerCollider.Original);
-        var player = new Player(spawn);
+        var navigationGrid = new NavigationGrid(terrainOccupancy);
+        var topology = _topologyAnalyzer.Analyze(caveMap, geometry, terrainOccupancy, navigationGrid);
+        var spawnResult = PlayerSpawnSystem.Select(
+            topology, geometry, terrainOccupancy, terrain, navigationGrid, PlayerCollider.Original, spawnOptions);
+        if (!spawnResult.IsSuccess) throw new PlayerSpawnException(spawnResult.Failure!);
+        var spawn = spawnResult.Selection!;
+        var player = new Player(spawn.Position);
         terrain.RefreshContacts(player);
-        var navigationGrid = new NavigationGrid(geometry);
+        var enemySpawnResult = EnemySpawnSystem.Select(
+            terrainOccupancy, navigationGrid, player, spawn, seed, enemySpawnOptions);
+        if (!enemySpawnResult.IsSuccess) throw new EnemySpawnException(enemySpawnResult.Failure!);
+        var enemySpawn = enemySpawnResult.Selection!;
         var enemies = new EnemyPopulation();
-        enemies.Reset(EnemySpawnSystem.Spawn(geometry, navigationGrid, terrain, seed));
+        enemies.Reset(enemySpawn.CreateEnemies());
         var enemyNavigation = new EnemyNavigationSystem(new AStarPathfinder(navigationGrid), terrain);
         var projectiles = new ProjectileSystem(terrain);
         var weaponState = new WeaponState();
@@ -69,12 +101,16 @@ public sealed class MainScreenRun
         Seed = seed;
         CaveMap = caveMap;
         Geometry = geometry;
+        TerrainOccupancy = terrainOccupancy;
         TerrainCollision = terrain;
         PlayerMovement = movement;
         Player = player;
         WeaponState = weaponState;
         Projectiles = projectiles;
         NavigationGrid = navigationGrid;
+        TopologyReport = topology;
+        PlayerSpawn = spawn;
+        EnemySpawn = enemySpawn;
         Enemies = enemies;
         EnemyNavigation = enemyNavigation;
     }

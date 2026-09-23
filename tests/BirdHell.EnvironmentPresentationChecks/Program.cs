@@ -1,6 +1,7 @@
 using System.Numerics;
 using BirdHell.Core;
 using BirdHell.Presentation;
+using BirdHell.World;
 using BirdHell.World.Geometry;
 
 const float tolerance = 0.0001f;
@@ -141,11 +142,15 @@ atmosphere.Advance(9.5d);
 atmosphere.ToggleVisibility();
 var elapsedBeforeReset = atmosphere.ElapsedSeconds;
 var visibleBeforeReset = atmosphere.IsVisible;
-var run = new MainScreenRun("environment-reset-policy");
+var run = new MainScreenRun(
+    "environment-reset-policy",
+    CaveGenerationProfiles.Select(CaveGenerationProfile.ConservativeIrregular));
 var sameSeedLayout = LayoutFingerprint(EnvironmentLayoutGenerator.Generate(run.Seed,
     run.Geometry.MinX, run.Geometry.MaxX));
 run.RestartSameSeed();
 atmosphere.OnGameplayReset();
+Assert(run.CaveProfile.Profile == CaveGenerationProfile.ConservativeIrregular,
+    "F5/same-seed reset changed the selected cave profile.");
 Assert(LayoutFingerprint(EnvironmentLayoutGenerator.Generate(run.Seed, run.Geometry.MinX, run.Geometry.MaxX)) ==
        sameSeedLayout, "F5/same-seed reset changed static environment layout.");
 Assert(atmosphere.ElapsedSeconds == elapsedBeforeReset && atmosphere.IsVisible == visibleBeforeReset,
@@ -153,6 +158,8 @@ Assert(atmosphere.ElapsedSeconds == elapsedBeforeReset && atmosphere.IsVisible =
 var oldSeed = run.Seed;
 run.StartNewRun();
 atmosphere.OnGameplayReset();
+Assert(run.CaveProfile.Profile == CaveGenerationProfile.ConservativeIrregular,
+    "R/new-seed reset changed the selected cave profile.");
 Assert(run.Seed != oldSeed && LayoutFingerprint(EnvironmentLayoutGenerator.Generate(run.Seed,
         run.Geometry.MinX, run.Geometry.MaxX)) != sameSeedLayout,
     "R/new-seed reset did not change static environment layout.");
