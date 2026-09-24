@@ -16,7 +16,10 @@ public sealed record EnemyNavigationDiagnostics(
     int NavigationComponentId,
     bool RecentlyCollidedWithTerrain,
     int TerrainCollisionCount,
-    int NearbyEnemyCount);
+    int NearbyEnemyCount,
+    Vector2 IntendedMovement,
+    Vector2 ActualMovement,
+    bool CollidedWithTerrainThisStep);
 
 public sealed class EnemyNavigationSystem
 {
@@ -69,6 +72,7 @@ public sealed class EnemyNavigationSystem
                     enemy.PathIndex = 0;
                     enemy.SuccessfulRepathCount++;
                 }
+                else enemy.FailedRepathCount++;
             }
 
             AdvanceWaypoint(enemy);
@@ -78,6 +82,7 @@ public sealed class EnemyNavigationSystem
                 enemy.Velocity = Vector2.Normalize(enemy.Velocity) * enemy.MaximumSpeed;
             var center = enemy.ColliderCenter;
             var velocity = enemy.Velocity;
+            GetMotionState(enemy.Id).IntendedMovement = velocity * deltaTime;
             collided[enemyIndex] = _terrain.MoveCircle(
                 ref center, ref velocity, velocity * deltaTime, enemy.ColliderRadius);
             enemy.Position = center - enemy.ColliderOffset;
@@ -91,6 +96,8 @@ public sealed class EnemyNavigationSystem
             var state = GetMotionState(enemy.Id);
             var distance = Vector2.Distance(enemy.ColliderCenter, playerPosition);
             state.LastStepDistance = Vector2.Distance(previousCenters[enemyIndex], enemy.ColliderCenter);
+            state.ActualMovement = enemy.ColliderCenter - previousCenters[enemyIndex];
+            state.CollidedThisStep = collided[enemyIndex];
             state.PlayerDistanceDelta = previousPlayerDistances[enemyIndex] - distance;
             state.StallDuration = distance > StallPlayerDistance &&
                                   enemy.PathIndex < enemy.Path.Count &&
@@ -131,7 +138,10 @@ public sealed class EnemyNavigationSystem
                 componentId,
                 state.RecentCollisionTime > 0f,
                 state.TerrainCollisionCount,
-                nearby);
+                nearby,
+                state.IntendedMovement,
+                state.ActualMovement,
+                state.CollidedThisStep);
         }).ToArray();
     }
 
@@ -215,5 +225,8 @@ public sealed class EnemyNavigationSystem
         public float StallDuration { get; set; }
         public float RecentCollisionTime { get; set; }
         public int TerrainCollisionCount { get; set; }
+        public Vector2 IntendedMovement { get; set; }
+        public Vector2 ActualMovement { get; set; }
+        public bool CollidedThisStep { get; set; }
     }
 }

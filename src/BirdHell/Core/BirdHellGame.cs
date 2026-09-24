@@ -1,4 +1,5 @@
 using BirdHell.Entities;
+using BirdHell.Diagnostics;
 using BirdHell.Presentation;
 using BirdHell.Systems;
 using BirdHell.World;
@@ -13,6 +14,7 @@ public sealed class BirdHellGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
     private readonly CaveGenerationProfileSelection _caveProfile;
+    private readonly FlightRecorderOptions _flightRecorderOptions;
     private readonly Camera2D _camera = new();
     private readonly DebugPresentationSettings _debug = new();
     private readonly WorldAnimationState _animations = new();
@@ -34,13 +36,17 @@ public sealed class BirdHellGame : Game
     private int _displayedEnemyCount = -1;
     private bool _displayedAllEnemiesDead;
     private float _navigationDiagnosticTitleTimer;
+    private FlightRecorder? _flightRecorder;
 
     private const float SimulationStep = 0.02f;
     private const double MaximumFrameTime = 0.1;
 
-    public BirdHellGame(CaveGenerationProfileSelection? caveProfile = null)
+    public BirdHellGame(
+        CaveGenerationProfileSelection? caveProfile = null,
+        FlightRecorderOptions? flightRecorderOptions = null)
     {
         _caveProfile = caveProfile ?? CaveGenerationProfiles.Default;
+        _flightRecorderOptions = flightRecorderOptions ?? new FlightRecorderOptions();
         _graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 1280,
@@ -58,6 +64,8 @@ public sealed class BirdHellGame : Game
     {
         _graphics.ApplyChanges();
         _run = new MainScreenRun(CaveGenerator.CreateRandomSeed(), _caveProfile);
+        _flightRecorder = FlightRecorder.Start(_flightRecorderOptions, _run, SimulationStep);
+        if (_flightRecorder is not null) _run.AttachFlightRecorder(_flightRecorder);
         CompleteHostReset();
         _previousKeyboardState = Keyboard.GetState();
         _previousMouseState = Mouse.GetState();
@@ -184,6 +192,7 @@ public sealed class BirdHellGame : Game
 
     protected override void UnloadContent()
     {
+        _flightRecorder?.Dispose();
         _environmentPresentation?.Dispose();
         _spritePresentation?.Dispose();
         _effect?.Dispose();

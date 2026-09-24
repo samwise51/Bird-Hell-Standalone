@@ -26,6 +26,9 @@ coverage/
 *.coverage
 *.coveragexml
 
+# Development flight-recorder sessions (source/tests/docs remain tracked)
+flight-recordings/
+
 # Operating-system metadata
 .DS_Store
 Thumbs.db

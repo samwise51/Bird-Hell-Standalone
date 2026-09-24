@@ -35,6 +35,7 @@ public sealed class Enemy : IDamageable
     public IReadOnlyList<Vector2> Path { get; set; } = Array.Empty<Vector2>();
     public int PathIndex { get; set; }
     public int SuccessfulRepathCount { get; set; }
+    public int FailedRepathCount { get; set; }
     public Vector2 SteeringTarget { get; set; }
 
     public void UpdateFacingFromHorizontalMovement(float horizontalVelocity)

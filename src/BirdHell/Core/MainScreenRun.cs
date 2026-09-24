@@ -1,4 +1,5 @@
 using BirdHell.Entities;
+using BirdHell.Diagnostics;
 using BirdHell.Systems;
 using BirdHell.World;
 using BirdHell.World.Analysis;
@@ -14,6 +15,7 @@ public sealed class MainScreenRun
     private readonly CaveTopologyAnalyzer _topologyAnalyzer = new();
     private readonly WeaponSystem _weaponSystem = new();
     private readonly EnemyCombatSystem _enemyCombat = new();
+    private FlightRecorder? _flightRecorder;
 
     public MainScreenRun(string seed)
         : this(seed, CaveGenerationProfiles.Default)
@@ -57,16 +59,38 @@ public sealed class MainScreenRun
         string seed;
         do seed = CaveGenerator.CreateRandomSeed();
         while (seed == Seed);
-        StartRun(seed);
+        InstallRun(seed, null, null);
+        _flightRecorder?.BeginRun(this, "new_seed");
     }
 
-    public void RestartSameSeed() => StartRun(Seed);
+    public void RestartSameSeed()
+    {
+        InstallRun(Seed, null, null);
+        _flightRecorder?.BeginRun(this, "same_seed_restart");
+    }
 
     public void StartRun(string seed) => StartRun(seed, null, null);
 
     public void StartRun(string seed, PlayerSpawnOptions? spawnOptions) => StartRun(seed, spawnOptions, null);
 
     public void StartRun(
+        string seed,
+        PlayerSpawnOptions? spawnOptions,
+        EnemySpawnOptions? enemySpawnOptions)
+    {
+        InstallRun(seed, spawnOptions, enemySpawnOptions);
+        _flightRecorder?.BeginRun(this, "explicit_seed");
+    }
+
+    public void AttachFlightRecorder(FlightRecorder recorder)
+    {
+        ArgumentNullException.ThrowIfNull(recorder);
+        if (_flightRecorder is not null) throw new InvalidOperationException("A flight recorder is already attached.");
+        _flightRecorder = recorder;
+        recorder.BeginRun(this, "initial");
+    }
+
+    private void InstallRun(
         string seed,
         PlayerSpawnOptions? spawnOptions,
         EnemySpawnOptions? enemySpawnOptions)
@@ -117,12 +141,15 @@ public sealed class MainScreenRun
 
     public MainScreenStepResult Step(PlayerInput input, bool firePressed, float deltaTime)
     {
+        var recorderBefore = _flightRecorder?.CaptureBeforeStep(this);
         var movementResult = PlayerMovement.Step(Player, input, deltaTime);
         var projectile = _weaponSystem.Fire(WeaponState, Player, firePressed);
         if (projectile is not null) Projectiles.Spawn(projectile);
         Projectiles.Step(deltaTime, Enemies.CreateProjectileTargets());
         EnemyNavigation.Step(Enemies.Enemies, Player.Position, deltaTime);
         _enemyCombat.Step(Enemies.Enemies, Player, deltaTime);
+        if (recorderBefore is not null)
+            _flightRecorder!.RecordStep(this, recorderBefore, input, firePressed, deltaTime);
         return new MainScreenStepResult(movementResult.SecondJumpPerformed);
     }
 

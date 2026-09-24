@@ -1,10 +1,10 @@
 using BirdHell.Core;
-using BirdHell.World;
+using BirdHell.Diagnostics;
 
-CaveGenerationProfileSelection caveProfile;
+BirdHellCommandLineOptions options;
 try
 {
-    caveProfile = CaveProfileCommandLine.Parse(args);
+    options = BirdHellCommandLine.Parse(args);
 }
 catch (ArgumentException exception)
 {
@@ -13,5 +13,5 @@ catch (ArgumentException exception)
     return;
 }
 
-using var game = new BirdHellGame(caveProfile);
+using var game = new BirdHellGame(options.CaveProfile, options.FlightRecorder);
 game.Run();
