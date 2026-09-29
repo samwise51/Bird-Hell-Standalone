@@ -13,7 +13,7 @@ namespace BirdHell.Core;
 public sealed class BirdHellGame : Game
 {
     private readonly GraphicsDeviceManager _graphics;
-    private readonly CaveGenerationProfileSelection _caveProfile;
+    private readonly GameFlow _flow;
     private readonly FlightRecorderOptions _flightRecorderOptions;
     private readonly FrameStallDiagnosticOptions _stallDiagnosticOptions;
     private readonly Camera2D _camera = new();
@@ -24,12 +24,15 @@ public sealed class BirdHellGame : Game
     private SpritePresentation? _spritePresentation;
     private EnvironmentPresentation? _environmentPresentation;
     private GameplayAudio? _audio;
+    private MenuPresentation? _menuPresentation;
     private MainScreenRun? _run;
     private VertexPositionColor[] _terrainVertices = [];
     private int[] _triangleIndices = [];
     private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
+    private MouseState _previousMouseState;
     private readonly GameplayInputAdapter _gameplayInput = new();
+    private readonly MenuInputAdapter _menuInput = new();
     private GamePadState[] _gamePadStates = [];
     private StallSectionTiming[] _gamePadPollingTimings = [];
     private SimulationStepTimings[] _simulationStepTimings = [];
@@ -43,6 +46,8 @@ public sealed class BirdHellGame : Game
     private float _navigationDiagnosticTitleTimer;
     private FlightRecorder? _flightRecorder;
     private FrameStallDiagnostics? _stallDiagnostics;
+    private int _windowedWidth = 1280;
+    private int _windowedHeight = 720;
 
     private const float SimulationStep = 0.02f;
     private const double MaximumFrameTime = 0.1;
@@ -54,7 +59,7 @@ public sealed class BirdHellGame : Game
         FlightRecorderOptions? flightRecorderOptions = null,
         FrameStallDiagnosticOptions? stallDiagnosticOptions = null)
     {
-        _caveProfile = caveProfile ?? CaveGenerationProfiles.Default;
+        _flow = new GameFlow(new GameOptions(caveProfile));
         _flightRecorderOptions = flightRecorderOptions ?? new FlightRecorderOptions();
         _stallDiagnosticOptions = stallDiagnosticOptions ?? new FrameStallDiagnosticOptions();
         _graphics = new GraphicsDeviceManager(this)
@@ -73,27 +78,24 @@ public sealed class BirdHellGame : Game
     protected override void Initialize()
     {
         _graphics.ApplyChanges();
-        _run = new MainScreenRun(CaveGenerator.CreateRandomSeed(), _caveProfile);
-        _flightRecorder = FlightRecorder.Start(_flightRecorderOptions, _run, SimulationStep);
-        if (_flightRecorder is not null) _run.AttachFlightRecorder(_flightRecorder);
-        _stallDiagnostics = FrameStallDiagnostics.Start(_stallDiagnosticOptions, _flightRecorder is not null);
-        CompleteHostReset();
+        _stallDiagnostics = FrameStallDiagnostics.Start(_stallDiagnosticOptions, _flightRecorderOptions.Enabled);
         _gamePadStates = new GamePadState[GamePad.MaximumGamePadCount];
         if (_stallDiagnostics is not null)
         {
             _gamePadPollingTimings = new StallSectionTiming[_gamePadStates.Length];
             _simulationStepTimings = new SimulationStepTimings[MaximumInstrumentedCatchUpSteps];
             _enemyNavigationStepTimings = new EnemyNavigationStepTimings[MaximumInstrumentedCatchUpSteps];
-            for (var index = 0; index < _enemyNavigationStepTimings.Length; index++)
-                _enemyNavigationStepTimings[index].Birds =
-                    new EnemyNavigationBirdTimings[_run.Enemies.Enemies.Count];
             _sceneryLayerTimings = new StallSectionTiming[SceneryLayerCount];
             _sceneryBatchTimings = new RenderBatchTimings[SceneryLayerCount];
         }
         var keyboardState = Keyboard.GetState();
         SampleGamePads();
-        _gameplayInput.UpdateFrame(keyboardState, Mouse.GetState(), _gamePadStates);
+        var mouseState = Mouse.GetState();
+        _gameplayInput.UpdateFrame(keyboardState, mouseState, _gamePadStates);
+        _menuInput.UpdateFrame(keyboardState, _gamePadStates);
         _previousKeyboardState = keyboardState;
+        _previousMouseState = mouseState;
+        UpdateWindowTitle();
         base.Initialize();
     }
 
@@ -106,6 +108,7 @@ public sealed class BirdHellGame : Game
         _environmentPresentation = new EnvironmentPresentation(GraphicsDevice, contentRoot);
         _audio = new GameplayAudio(Content);
         _audio.StartMusic();
+        _menuPresentation = new MenuPresentation(GraphicsDevice);
         if (_run is not null)
             _environmentPresentation.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
         _effect = new BasicEffect(GraphicsDevice)
@@ -139,6 +142,7 @@ public sealed class BirdHellGame : Game
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         _gameplayInput.UpdateFrame(keyboardState, mouseState, _gamePadStates);
+        var menuAction = _menuInput.UpdateFrame(keyboardState, _gamePadStates);
         if (_stallDiagnostics is not null)
         {
             timings.InputAdapter = FrameStallDiagnostics.Complete(timingStart);
@@ -146,12 +150,24 @@ public sealed class BirdHellGame : Game
         }
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-        if (keyboardState.IsKeyDown(Keys.Escape)) Exit();
+        var flowResult = default(GameFlowResult);
+        if (_flow.Screen != GameScreen.Gameplay && _menuPresentation is not null)
+        {
+            var hit = _menuPresentation.HitTest(_flow, new Point(mouseState.X, mouseState.Y));
+            var mouseMoved = mouseState.X != _previousMouseState.X || mouseState.Y != _previousMouseState.Y;
+            if (mouseMoved && hit is { } hovered) _flow.Focus(hovered.ItemIndex);
+            if (mouseState.LeftButton == ButtonState.Pressed &&
+                _previousMouseState.LeftButton == ButtonState.Released && hit is { } clicked)
+                menuAction = clicked.Action;
+        }
+        if (_flow.Screen != GameScreen.MainMenu || menuAction != MenuAction.Back)
+            flowResult = _flow.Handle(menuAction);
+        ApplyFlowResult(flowResult);
         if (_stallDiagnostics is not null) timings.ExitKeyHandling = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         var resetThisFrame = false;
-        if (WasPressed(keyboardState, Keys.R))
+        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.R))
         {
             var resetTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _run?.StartNewRun();
@@ -163,7 +179,7 @@ public sealed class BirdHellGame : Game
                 timings.HostReset = FrameStallDiagnostics.Complete(resetTimingStart);
             resetThisFrame = true;
         }
-        else if (WasPressed(keyboardState, Keys.F5))
+        else if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.F5))
         {
             var resetTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _run?.RestartSameSeed();
@@ -179,22 +195,22 @@ public sealed class BirdHellGame : Game
             timings.LifecycleKeyHandling = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-        if (WasPressed(keyboardState, Keys.O))
+        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.O))
         {
             _debug.ToggleOutlines();
             UpdateWindowTitle();
         }
-        if (WasPressed(keyboardState, Keys.C))
+        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.C))
         {
             _debug.ToggleCollision();
             UpdateWindowTitle();
         }
-        if (WasPressed(keyboardState, Keys.N))
+        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.N))
         {
             _debug.ToggleNavigation();
             UpdateWindowTitle();
         }
-        if (WasPressed(keyboardState, Keys.V))
+        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.V))
         {
             _atmosphere.ToggleVisibility();
             UpdateWindowTitle();
@@ -208,7 +224,7 @@ public sealed class BirdHellGame : Game
             timings.AtmosphereAdvance = FrameStallDiagnostics.Complete(timingStart);
 
         var fixedStepCount = 0;
-        if (!resetThisFrame)
+        if (_flow.Screen == GameScreen.Gameplay && _run is not null && !resetThisFrame)
         {
             timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _simulationAccumulator += Math.Min(gameTime.ElapsedGameTime.TotalSeconds, MaximumFrameTime);
@@ -246,6 +262,7 @@ public sealed class BirdHellGame : Game
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         _previousKeyboardState = keyboardState;
+        _previousMouseState = mouseState;
         if (_stallDiagnostics is not null)
             timings.UpdateStateCommit = FrameStallDiagnostics.Complete(timingStart);
 
@@ -271,6 +288,24 @@ public sealed class BirdHellGame : Game
         var timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         GraphicsDevice.Clear(new Color(16, 23, 47));
         if (_stallDiagnostics is not null) timings.GraphicsClear = FrameStallDiagnostics.Complete(timingStart);
+
+        if (_flow.Screen != GameScreen.Gameplay)
+        {
+            timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+            _menuPresentation?.Draw(_flow, gameTime.TotalGameTime.TotalSeconds);
+            if (_stallDiagnostics is not null) timings.MenuRender = FrameStallDiagnostics.Complete(timingStart);
+            timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+            base.Draw(gameTime);
+            if (_stallDiagnostics is not null)
+            {
+                timings.BaseDraw = FrameStallDiagnostics.Complete(timingStart);
+                var menuEventGroupId = _stallDiagnostics.RecordRootSection(
+                    "draw", FrameStallDiagnostics.Complete(drawTimingStart), gameTime.TotalGameTime);
+                RecordDrawBreakdown(menuEventGroupId, timings, gameTime.TotalGameTime);
+            }
+            _stallDiagnostics?.ObserveCallbackEnd("draw");
+            return;
+        }
 
         var environmentTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
@@ -385,6 +420,7 @@ public sealed class BirdHellGame : Game
         _stallDiagnostics?.Dispose();
         _environmentPresentation?.Dispose();
         _spritePresentation?.Dispose();
+        _menuPresentation?.Dispose();
         _audio?.Dispose();
         _effect?.Dispose();
     }
@@ -413,6 +449,8 @@ public sealed class BirdHellGame : Game
 
         _stallDiagnostics.RecordNestedSection(
             "graphics_device_clear", "draw", eventGroupId, timings.GraphicsClear, gameTime);
+        _stallDiagnostics.RecordNestedSection(
+            "menu_render", "draw", eventGroupId, timings.MenuRender, gameTime);
         if (_stallDiagnostics.RecordNestedSection(
                 "environment_render", "draw", eventGroupId, timings.Environment, gameTime))
         {
@@ -554,6 +592,69 @@ public sealed class BirdHellGame : Game
 
     private bool WasPressed(KeyboardState currentState, Keys key) =>
         currentState.IsKeyDown(key) && _previousKeyboardState.IsKeyUp(key);
+
+    private void ApplyFlowResult(GameFlowResult result)
+    {
+        if (result.ApplyDisplayMode) ApplyDisplayMode();
+        if (result.EndGameplay) EndGameplay();
+        if (result.StartGameplay) StartGameplay();
+        if (result.ExitRequested) Exit();
+        if (_flow.Screen != GameScreen.Gameplay) UpdateWindowTitle();
+    }
+
+    private void StartGameplay()
+    {
+        EndGameplay();
+        var options = _flow.Options;
+        _run = new MainScreenRun(
+            CaveGenerator.CreateRandomSeed(), options.CaveProfile, options.BirdCount, options.Invincible);
+        _flightRecorder = FlightRecorder.Start(_flightRecorderOptions, _run, SimulationStep);
+        if (_flightRecorder is not null) _run.AttachFlightRecorder(_flightRecorder);
+        if (_stallDiagnostics is not null)
+        {
+            for (var index = 0; index < _enemyNavigationStepTimings.Length; index++)
+                _enemyNavigationStepTimings[index].Birds =
+                    new EnemyNavigationBirdTimings[_run.Enemies.Enemies.Count];
+        }
+        CompleteHostReset();
+    }
+
+    private void EndGameplay()
+    {
+        _flightRecorder?.Dispose();
+        _flightRecorder = null;
+        _run = null;
+        _simulationAccumulator = 0d;
+        _terrainVertices = [];
+        _triangleIndices = [];
+        _outlineVertices = [];
+        _gameplayInput.ClearBufferedEdges();
+        UpdateWindowTitle();
+    }
+
+    private void ApplyDisplayMode()
+    {
+        if (_flow.Options.Fullscreen)
+        {
+            if (!_graphics.IsFullScreen)
+            {
+                _windowedWidth = Math.Max(800, Window.ClientBounds.Width);
+                _windowedHeight = Math.Max(450, Window.ClientBounds.Height);
+            }
+            var display = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
+            _graphics.HardwareModeSwitch = false;
+            _graphics.PreferredBackBufferWidth = display.Width;
+            _graphics.PreferredBackBufferHeight = display.Height;
+            _graphics.IsFullScreen = true;
+        }
+        else
+        {
+            _graphics.IsFullScreen = false;
+            _graphics.PreferredBackBufferWidth = _windowedWidth;
+            _graphics.PreferredBackBufferHeight = _windowedHeight;
+        }
+        _graphics.ApplyChanges();
+    }
 
     private void CompleteHostReset()
     {
@@ -1142,6 +1243,7 @@ public sealed class BirdHellGame : Game
     private struct DrawTimings
     {
         public StallSectionTiming GraphicsClear;
+        public StallSectionTiming MenuRender;
         public StallSectionTiming Environment;
         public StallSectionTiming Sky;
         public RenderBatchTimings SkyBatch;
@@ -1174,7 +1276,13 @@ public sealed class BirdHellGame : Game
 
     private void UpdateWindowTitle()
     {
-        if (_run is null) return;
+        if (_run is null)
+        {
+            Window.Title = _flow.Screen == GameScreen.Options
+                ? "Bird Hell Standalone - Options"
+                : "Bird Hell Standalone - Main Menu";
+            return;
+        }
         _navigationDiagnosticTitleTimer = 0f;
         _displayedHealth = _run.Player.Health;
         _displayedEnemyCount = _run.Enemies.LivingCount;
@@ -1206,7 +1314,7 @@ public sealed class BirdHellGame : Game
                     $"near {item.NearbyEnemyCount} stall {item.StallDuration:F1}s";
             }
         }
-        Window.Title = $"Bird Hell [{_run.CaveProfileName}] - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state}{navigationDiagnostic} - " +
-                       $"A/D or left stick move, SPACE/A jump, S/Down crouch, LMB/Ctrl/RT fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC exit - Seed: {_run.Seed}";
+        Window.Title = $"Bird Hell [{_run.CaveProfileName}] - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/{_run.Enemies.Enemies.Count}{state}{navigationDiagnostic} - " +
+                       $"A/D or left stick move, SPACE/A jump, S/Down crouch, LMB/Ctrl/RT fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC menu - Seed: {_run.Seed}";
     }
 }

@@ -15,6 +15,8 @@ public sealed class MainScreenRun
     private readonly CaveTopologyAnalyzer _topologyAnalyzer = new();
     private readonly WeaponSystem _weaponSystem = new();
     private readonly EnemyCombatSystem _enemyCombat = new();
+    private readonly int _birdCount;
+    private readonly bool _playerInvincible;
     private FlightRecorder? _flightRecorder;
 
     public MainScreenRun(string seed)
@@ -23,8 +25,20 @@ public sealed class MainScreenRun
     }
 
     public MainScreenRun(string seed, CaveGenerationProfileSelection caveProfile)
+        : this(seed, caveProfile, EnemySpawnSystem.OriginalEnemyCount, false)
     {
+    }
+
+    public MainScreenRun(
+        string seed,
+        CaveGenerationProfileSelection caveProfile,
+        int birdCount,
+        bool playerInvincible)
+    {
+        if (birdCount <= 0) throw new ArgumentOutOfRangeException(nameof(birdCount));
         CaveProfile = caveProfile ?? throw new ArgumentNullException(nameof(caveProfile));
+        _birdCount = birdCount;
+        _playerInvincible = playerInvincible;
         _caveGenerator = new CaveGenerator(CaveProfile.Options);
         StartRun(seed);
     }
@@ -110,10 +124,11 @@ public sealed class MainScreenRun
             topology, geometry, terrainOccupancy, terrain, navigationGrid, PlayerCollider.Original, spawnOptions);
         if (!spawnResult.IsSuccess) throw new PlayerSpawnException(spawnResult.Failure!);
         var spawn = spawnResult.Selection!;
-        var player = new Player(spawn.Position);
+        var player = new Player(spawn.Position, isInvincible: _playerInvincible);
         terrain.RefreshContacts(player);
         var enemySpawnResult = EnemySpawnSystem.Select(
-            terrainOccupancy, navigationGrid, player, spawn, seed, enemySpawnOptions);
+            terrainOccupancy, navigationGrid, player, spawn, seed,
+            enemySpawnOptions ?? new EnemySpawnOptions { EnemyCount = _birdCount });
         if (!enemySpawnResult.IsSuccess) throw new EnemySpawnException(enemySpawnResult.Failure!);
         var enemySpawn = enemySpawnResult.Selection!;
         var enemies = new EnemyPopulation();

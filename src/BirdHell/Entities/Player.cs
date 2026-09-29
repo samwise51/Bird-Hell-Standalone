@@ -19,10 +19,11 @@ public sealed class Player : Systems.IDamageable
     public const int DefaultMaximumHealth = 100;
     public const float DamageFlashDuration = 0.5f;
 
-    public Player(Vector2 position, PlayerCollider? collider = null)
+    public Player(Vector2 position, PlayerCollider? collider = null, bool isInvincible = false)
     {
         Position = position;
         Collider = collider ?? PlayerCollider.Original;
+        IsInvincible = isInvincible;
     }
 
     public Vector2 Position { get; set; }
@@ -36,7 +37,8 @@ public sealed class Player : Systems.IDamageable
     public int MaximumHealth { get; } = DefaultMaximumHealth;
     public int Health { get; private set; } = DefaultMaximumHealth;
     public bool IsAlive { get; private set; } = true;
-    public bool CanTakeDamage => IsAlive;
+    public bool IsInvincible { get; }
+    public bool CanTakeDamage => IsAlive && !IsInvincible;
     public float DamageFlashTime { get; private set; }
 
     public Vector2 ColliderCenter => Position + Collider.Offset;
@@ -44,7 +46,7 @@ public sealed class Player : Systems.IDamageable
     public Systems.DamageResult TakeDamage(int damage)
     {
         if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));
-        if (!IsAlive || damage == 0) return default;
+        if (!CanTakeDamage || damage == 0) return default;
         Health = Math.Max(0, Health - damage);
         DamageFlashTime = DamageFlashDuration;
         var killed = Health == 0;

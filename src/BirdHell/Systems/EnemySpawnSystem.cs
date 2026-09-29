@@ -7,6 +7,7 @@ namespace BirdHell.Systems;
 
 public sealed record EnemySpawnOptions
 {
+    public int EnemyCount { get; init; } = EnemySpawnSystem.OriginalEnemyCount;
     public float CollisionSafetyMargin { get; init; } = 0.01f;
     public float PreferredMinimumEnemySpacing { get; init; } = 1.5f;
     public float PreferredMaximumEnemySpacing { get; init; } = 2f;
@@ -182,13 +183,13 @@ public static class EnemySpawnSystem
                 "The player's navigation component contains no collision-safe enemy positions.");
 
         var selected = SelectFarthestPoints(
-            candidates, hardMinimumSeparation, OriginalEnemyCount, options);
-        if (selected.Count != OriginalEnemyCount)
+            candidates, hardMinimumSeparation, options.EnemyCount, options);
+        if (selected.Count != options.EnemyCount)
             return Failed(
                 EnemySpawnFailureCode.InsufficientSeparatedCapacity,
                 candidates.Count,
                 selected.Count,
-                $"Only {selected.Count} of {OriginalEnemyCount} required nonoverlapping enemy positions could be selected.");
+                $"Only {selected.Count} of {options.EnemyCount} required nonoverlapping enemy positions could be selected.");
 
         var placements = selected.Select((candidate, id) => new EnemySpawnPlacement(
                 id,
@@ -213,7 +214,7 @@ public static class EnemySpawnSystem
             int selectedCount,
             string message) => EnemySpawnResult.Failed(new EnemySpawnFailure(
             code,
-            OriginalEnemyCount,
+            options.EnemyCount,
             candidateCount,
             selectedCount,
             componentId,
@@ -334,6 +335,7 @@ public static class EnemySpawnSystem
 
     private static void ValidateOptions(EnemySpawnOptions options)
     {
+        if (options.EnemyCount <= 0) throw new ArgumentOutOfRangeException(nameof(options.EnemyCount));
         if (!float.IsFinite(options.CollisionSafetyMargin) || options.CollisionSafetyMargin < 0f)
             throw new ArgumentOutOfRangeException(nameof(options.CollisionSafetyMargin));
         if (!float.IsFinite(options.PreferredMinimumEnemySpacing) || options.PreferredMinimumEnemySpacing < 0f)
