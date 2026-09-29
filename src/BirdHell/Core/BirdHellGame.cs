@@ -23,6 +23,7 @@ public sealed class BirdHellGame : Game
     private BasicEffect? _effect;
     private SpritePresentation? _spritePresentation;
     private EnvironmentPresentation? _environmentPresentation;
+    private GameplayAudio? _audio;
     private MainScreenRun? _run;
     private VertexPositionColor[] _terrainVertices = [];
     private int[] _triangleIndices = [];
@@ -103,6 +104,8 @@ public sealed class BirdHellGame : Game
             GraphicsDevice,
             contentRoot);
         _environmentPresentation = new EnvironmentPresentation(GraphicsDevice, contentRoot);
+        _audio = new GameplayAudio(Content);
+        _audio.StartMusic();
         if (_run is not null)
             _environmentPresentation.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
         _effect = new BasicEffect(GraphicsDevice)
@@ -382,6 +385,7 @@ public sealed class BirdHellGame : Game
         _stallDiagnostics?.Dispose();
         _environmentPresentation?.Dispose();
         _spritePresentation?.Dispose();
+        _audio?.Dispose();
         _effect?.Dispose();
     }
 
@@ -644,7 +648,7 @@ public sealed class BirdHellGame : Game
             _animations.Player.Playback.CurrentFrame,
             player.Position,
             PlayerAnimationState.FlipForFacing(player.FacingDirection),
-            player.DamageFlashTime > 0f ? Color.White : Color.White);
+            HitFeedbackPresentation.TintFor(player.DamageFlashTime));
     }
 
     private static IReadOnlyList<Microsoft.Xna.Framework.Vector2> BuildPlayerPolygon(Player player)
@@ -706,6 +710,10 @@ public sealed class BirdHellGame : Game
                 input.FirePressed,
                 SimulationStep);
         if (captureTimings) timings.RunStep = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+        if (_audio is not null) GameplayFeedbackAudioRouter.Route(stepResult.Feedback, _audio);
+        if (captureTimings) timings.AudioFeedback = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _animations.Player.Update(
@@ -824,6 +832,8 @@ public sealed class BirdHellGame : Game
             _stallDiagnostics.RecordNestedSection(
                 "flight_recorder_before_step", "run_step", eventGroupId, systems.FlightRecorderBefore, gameTime);
             _stallDiagnostics.RecordNestedSection(
+                "feedback_advance", "run_step", eventGroupId, systems.FeedbackAdvance, gameTime);
+            _stallDiagnostics.RecordNestedSection(
                 "player_movement", "run_step", eventGroupId, systems.PlayerMovement, gameTime);
             _stallDiagnostics.RecordNestedSection(
                 "weapon", "run_step", eventGroupId, systems.Weapon, gameTime);
@@ -838,6 +848,8 @@ public sealed class BirdHellGame : Game
             _stallDiagnostics.RecordNestedSection(
                 "flight_recorder_after_step", "run_step", eventGroupId, systems.FlightRecorderAfter, gameTime);
         }
+        _stallDiagnostics.RecordNestedSection(
+            "audio_feedback", stepSection, eventGroupId, timings.AudioFeedback, gameTime);
         _stallDiagnostics.RecordNestedSection(
             "animation_advance", stepSection, eventGroupId, timings.AnimationAdvance, gameTime);
         _stallDiagnostics.RecordNestedSection(
@@ -932,7 +944,7 @@ public sealed class BirdHellGame : Game
                 _animations.Enemy.CurrentFrame,
                 enemy.Position,
                 WorldAnimationState.EnemyFlip(enemy.FacingDirection),
-                enemy.DamageFlashTime > 0f ? Color.White : Color.White);
+                HitFeedbackPresentation.TintFor(enemy.DamageFlashTime));
     }
 
     private void DrawNavigationDebug(BasicEffect effect)
@@ -1121,6 +1133,7 @@ public sealed class BirdHellGame : Game
         public StallSectionTiming Total;
         public StallSectionTiming RunStep;
         public MainScreenStepTimings RunSystems;
+        public StallSectionTiming AudioFeedback;
         public StallSectionTiming AnimationAdvance;
         public StallSectionTiming CameraStep;
         public StallSectionTiming StatusAndWindowTitle;

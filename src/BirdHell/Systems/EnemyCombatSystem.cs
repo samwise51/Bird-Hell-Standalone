@@ -8,19 +8,23 @@ public sealed class EnemyCombatSystem
     public const int ContactDamage = 25;
     public const float ContactDelay = 1f;
 
-    public void Step(IReadOnlyList<Enemy> enemies, Player player, float deltaTime)
+    public EnemyCombatStepResult Step(IReadOnlyList<Enemy> enemies, Player player, float deltaTime)
     {
         ArgumentNullException.ThrowIfNull(enemies);
         ArgumentNullException.ThrowIfNull(player);
         if (deltaTime <= 0f || !float.IsFinite(deltaTime)) throw new ArgumentOutOfRangeException(nameof(deltaTime));
-        player.AdvanceFeedback(deltaTime);
+        var damageEvents = 0;
+        var playerDied = false;
         foreach (var enemy in enemies.Where(enemy => enemy.IsAlive).OrderBy(enemy => enemy.Id))
         {
             enemy.ContactTimer += deltaTime;
             if (!player.IsAlive || enemy.ContactTimer <= ContactDelay || !Overlaps(enemy, player)) continue;
-            player.TakeDamage(ContactDamage);
+            var damage = player.TakeDamage(ContactDamage);
+            if (damage.Applied) damageEvents++;
+            playerDied |= damage.Killed;
             enemy.ContactTimer = 0f;
         }
+        return new EnemyCombatStepResult(damageEvents, playerDied);
     }
 
     public static bool Overlaps(Enemy enemy, Player player)
@@ -37,3 +41,5 @@ public sealed class EnemyCombatSystem
         return Vector2.DistanceSquared(enemy.ColliderCenter, closest) <= radius * radius;
     }
 }
+
+public readonly record struct EnemyCombatStepResult(int PlayerDamageEvents, bool PlayerDied);

@@ -167,6 +167,11 @@ public sealed class MainScreenRun
         if (captureTimings) timings.FlightRecorderBefore = FrameStallDiagnostics.Complete(timing);
 
         timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
+        Player.AdvanceFeedback(deltaTime);
+        foreach (var enemy in Enemies.Enemies) enemy.AdvanceFeedback(deltaTime);
+        if (captureTimings) timings.FeedbackAdvance = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         var movementResult = PlayerMovement.Step(Player, input, deltaTime);
         if (captureTimings) timings.PlayerMovement = FrameStallDiagnostics.Complete(timing);
 
@@ -176,7 +181,7 @@ public sealed class MainScreenRun
         if (captureTimings) timings.Weapon = FrameStallDiagnostics.Complete(timing);
 
         timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
-        Projectiles.Step(deltaTime, Enemies.CreateProjectileTargets());
+        var projectileResult = Projectiles.Step(deltaTime, Enemies.CreateProjectileTargets());
         if (captureTimings) timings.Projectiles = FrameStallDiagnostics.Complete(timing);
 
         timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
@@ -187,25 +192,42 @@ public sealed class MainScreenRun
         if (captureTimings) timings.EnemyNavigation = FrameStallDiagnostics.Complete(timing);
 
         timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
-        _enemyCombat.Step(Enemies.Enemies, Player, deltaTime);
+        var combatResult = _enemyCombat.Step(Enemies.Enemies, Player, deltaTime);
         if (captureTimings) timings.EnemyCombat = FrameStallDiagnostics.Complete(timing);
 
         timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         if (recorderBefore is not null)
             _flightRecorder!.RecordStep(this, recorderBefore, input, firePressed, deltaTime);
         if (captureTimings) timings.FlightRecorderAfter = FrameStallDiagnostics.Complete(timing);
-        return new MainScreenStepResult(movementResult.SecondJumpPerformed);
+        return new MainScreenStepResult(
+            movementResult.SecondJumpPerformed,
+            new GameplayFeedbackEvents(
+                projectile is not null ? 1 : 0,
+                combatResult.PlayerDamageEvents,
+                combatResult.PlayerDied,
+                projectileResult.DamageEvents,
+                projectileResult.DeathEvents));
     }
 
     public System.Numerics.Vector2 GetAimDirection() => _weaponSystem.GetAimDirection(Player);
     public System.Numerics.Vector2 GetMuzzlePosition() => _weaponSystem.GetMuzzlePosition(Player);
 }
 
-public readonly record struct MainScreenStepResult(bool SecondJumpPerformed);
+public readonly record struct GameplayFeedbackEvents(
+    int ProjectilesFired,
+    int PlayerDamageEvents,
+    bool PlayerDied,
+    int EnemyDamageEvents,
+    int EnemyDeaths);
+
+public readonly record struct MainScreenStepResult(
+    bool SecondJumpPerformed,
+    GameplayFeedbackEvents Feedback);
 
 internal struct MainScreenStepTimings
 {
     public StallSectionTiming FlightRecorderBefore;
+    public StallSectionTiming FeedbackAdvance;
     public StallSectionTiming PlayerMovement;
     public StallSectionTiming Weapon;
     public StallSectionTiming Projectiles;

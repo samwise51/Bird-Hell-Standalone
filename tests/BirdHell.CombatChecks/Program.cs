@@ -1,5 +1,7 @@
 using System.Numerics;
+using BirdHell.Core;
 using BirdHell.Entities;
+using BirdHell.Presentation;
 using BirdHell.Systems;
 
 const float tolerance = 0.0001f;
@@ -66,9 +68,83 @@ Console.WriteLine("PASS: projectile lifetime support expires deterministically w
 var targetSystem = new ProjectileSystem(emptyTerrain);
 var dummy = new DummyDamageable();
 targetSystem.Spawn(NewProjectile(Vector2.Zero, Vector2.UnitX));
-targetSystem.Step(0.1f, [new ProjectileTarget(dummy, new Vector2(1.5f, 0f), 0.2f)]);
+var targetResult = targetSystem.Step(0.1f, [new ProjectileTarget(dummy, new Vector2(1.5f, 0f), 0.2f)]);
 Assert(dummy.Health == 75 && targetSystem.Projectiles.Count == 0, "Enemy-compatible target did not receive projectile damage.");
+Assert(targetResult == new ProjectileStepResult(1, 0),
+    "A confirmed projectile hit did not report exactly one nonfatal damage event.");
 Console.WriteLine("PASS: renderer-independent damage target receives 25 damage and consumes the projectile");
+
+var feedbackPlayer = new Player(Vector2.Zero);
+var firstPlayerDamage = feedbackPlayer.TakeDamage(25);
+Assert(firstPlayerDamage == new DamageResult(true, false) &&
+       MathF.Abs(feedbackPlayer.DamageFlashTime - Player.DamageFlashDuration) < tolerance,
+    "Confirmed player damage did not start the exact 0.5-second flash.");
+feedbackPlayer.AdvanceFeedback(0.49f);
+Assert(feedbackPlayer.DamageFlashTime > 0f, "Player flash ended before 0.5 seconds.");
+feedbackPlayer.TakeDamage(25);
+Assert(MathF.Abs(feedbackPlayer.DamageFlashTime - Player.DamageFlashDuration) < tolerance,
+    "Repeated player damage did not restart the flash.");
+feedbackPlayer.AdvanceFeedback(0.5f);
+Assert(feedbackPlayer.DamageFlashTime == 0f, "Player flash remained active after 0.5 seconds.");
+Assert(HitFeedbackPresentation.TintFor(0.1f) == HitFeedbackPresentation.DamageTint &&
+       HitFeedbackPresentation.TintFor(0f) == HitFeedbackPresentation.NormalTint,
+    "Flash state did not select the red and normal presentation tints.");
+Console.WriteLine("PASS: player damage flash lasts 0.5 seconds, refreshes on repeat hits, and restores normal tint");
+
+var firstBird = new Enemy(1, Vector2.Zero, 2);
+var secondBird = new Enemy(2, new Vector2(10f, 0f), 2);
+var birdHitSystem = new ProjectileSystem(emptyTerrain);
+birdHitSystem.Spawn(NewProjectile(new Vector2(-1f, 0f), Vector2.UnitX));
+var birdHit = birdHitSystem.Step(0.1f,
+    [new ProjectileTarget(firstBird, Vector2.Zero, 0.2f), new ProjectileTarget(secondBird, secondBird.Position, 0.2f)]);
+Assert(birdHit == new ProjectileStepResult(1, 0) &&
+       firstBird.DamageFlashTime == Enemy.DamageFlashDuration && secondBird.DamageFlashTime == 0f,
+    "Projectile damage did not flash only the confirmed target bird.");
+firstBird.AdvanceFeedback(0.25f);
+firstBird.TakeDamage(25);
+Assert(firstBird.DamageFlashTime == Enemy.DamageFlashDuration,
+    "Repeated bird damage did not restart the flash.");
+firstBird.AdvanceFeedback(0.5f);
+Assert(firstBird.DamageFlashTime == 0f, "Bird flash remained active after 0.5 seconds.");
+Console.WriteLine("PASS: projectile hits flash only the damaged bird for a refreshable 0.5 seconds");
+
+var contactPlayer = new Player(Vector2.Zero);
+var contactBird = new Enemy(3, contactPlayer.ColliderCenter - Enemy.OriginalColliderOffset, 2)
+{
+    ContactTimer = EnemyCombatSystem.ContactDelay,
+};
+var contactResult = new EnemyCombatSystem().Step([contactBird], contactPlayer, 0.02f);
+Assert(contactResult == new EnemyCombatStepResult(1, false),
+    "Applied contact damage did not report exactly one player-hit event.");
+var noContactResult = new EnemyCombatSystem().Step([contactBird], contactPlayer, 0.02f);
+Assert(noContactResult.PlayerDamageEvents == 0,
+    "Contact feedback triggered when the >1-second damage rule did not apply damage.");
+
+var dyingPlayer = new Player(Vector2.Zero);
+dyingPlayer.TakeDamage(75);
+var lethalContactBird = new Enemy(4, dyingPlayer.ColliderCenter - Enemy.OriginalColliderOffset, 2)
+{
+    ContactTimer = EnemyCombatSystem.ContactDelay,
+};
+var lethalContact = new EnemyCombatSystem().Step([lethalContactBird], dyingPlayer, 0.02f);
+Assert(lethalContact == new EnemyCombatStepResult(1, true),
+    "Lethal contact did not report both the confirmed hit and player death.");
+
+var dyingBird = new Enemy(5, Vector2.Zero, 2);
+dyingBird.TakeDamage(75);
+var lethalProjectileSystem = new ProjectileSystem(emptyTerrain);
+lethalProjectileSystem.Spawn(NewProjectile(new Vector2(-1f, 0f), Vector2.UnitX));
+var lethalProjectile = lethalProjectileSystem.Step(
+    0.1f, [new ProjectileTarget(dyingBird, Vector2.Zero, 0.2f)]);
+Assert(lethalProjectile == new ProjectileStepResult(1, 1),
+    "Lethal projectile damage did not report both the confirmed bird hit and bird death.");
+
+var audioSink = new CountingAudioSink();
+GameplayFeedbackAudioRouter.Route(new GameplayFeedbackEvents(2, 1, true, 3, 1), audioSink);
+Assert((audioSink.ProjectileFired, audioSink.PlayerHit, audioSink.PlayerDeath,
+        audioSink.EnemyHit, audioSink.EnemyDeath) == (2, 1, 1, 3, 1),
+    "Confirmed feedback events were not routed one-for-one to audio cues.");
+Console.WriteLine("PASS: contact gating and headless audio routing follow confirmed gameplay events one-for-one");
 
 var deterministicFirst = SimulateSequence();
 var deterministicSecond = SimulateSequence();
@@ -107,5 +183,24 @@ static void Assert(bool condition, string message)
 sealed class DummyDamageable : IDamageable
 {
     public int Health { get; private set; } = 100;
-    public void TakeDamage(int damage) => Health -= damage;
+    public DamageResult TakeDamage(int damage)
+    {
+        Health -= damage;
+        return new DamageResult(true, Health <= 0);
+    }
+}
+
+sealed class CountingAudioSink : IGameplayAudioSink
+{
+    public int ProjectileFired { get; private set; }
+    public int PlayerHit { get; private set; }
+    public int PlayerDeath { get; private set; }
+    public int EnemyHit { get; private set; }
+    public int EnemyDeath { get; private set; }
+
+    public void PlayProjectileFired() => ProjectileFired++;
+    public void PlayPlayerHit() => PlayerHit++;
+    public void PlayPlayerDeath() => PlayerDeath++;
+    public void PlayEnemyHit() => EnemyHit++;
+    public void PlayEnemyDeath() => EnemyDeath++;
 }

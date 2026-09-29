@@ -107,6 +107,13 @@ Assert(run.Player.Health == 100 && run.Player.IsAlive, "A new run did not start 
 Assert(run.Enemies.LivingCount == EnemySpawnSystem.OriginalEnemyCount, "A new run did not contain exactly 15 living enemies.");
 Console.WriteLine("PASS: new run starts Playing with a live 100-health player and exactly 15 birds");
 
+var fireStep = run.Step(new PlayerInput(0f, false, false), true, step);
+Assert(fireStep.Feedback.ProjectilesFired == 1 && fireStep.Feedback.PlayerDamageEvents == 0 &&
+       fireStep.Feedback.EnemyDamageEvents == 0,
+    "A successful projectile spawn did not emit exactly one fire event without invented hit events.");
+run.Projectiles.Clear();
+Console.WriteLine("PASS: fixed-step result emits one fire event only for a successfully spawned projectile");
+
 var contactEnemy = run.Enemies.Enemies[0];
 contactEnemy.Position = run.Player.ColliderCenter - contactEnemy.ColliderOffset;
 var contact = new EnemyCombatSystem();

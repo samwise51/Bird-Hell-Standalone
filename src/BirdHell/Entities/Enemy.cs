@@ -6,6 +6,7 @@ namespace BirdHell.Entities;
 public sealed class Enemy : IDamageable
 {
     public const int DefaultMaximumHealth = 100;
+    public const float DamageFlashDuration = 0.5f;
     public const float OriginalColliderRadius = 0.45807048f;
     public static readonly Vector2 OriginalColliderOffset = new(-0.15384216f, -0.07692099f);
 
@@ -45,20 +46,23 @@ public sealed class Enemy : IDamageable
         else if (horizontalVelocity <= -0.01f) FacingDirection = -1;
     }
 
-    public void TakeDamage(int damage)
+    public DamageResult TakeDamage(int damage)
     {
         if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));
-        if (!IsAlive || damage == 0) return;
+        if (!IsAlive || damage == 0) return default;
         Health = Math.Max(0, Health - damage);
-        DamageFlashTime = 0.15f;
-        if (Health == 0)
+        DamageFlashTime = DamageFlashDuration;
+        var killed = Health == 0;
+        if (killed)
         {
             IsAlive = false;
             Velocity = Vector2.Zero;
             Path = Array.Empty<Vector2>();
             PathIndex = 0;
         }
+        return new DamageResult(true, killed);
     }
 
-    public void AdvanceFeedback(float deltaTime) => DamageFlashTime = MathF.Max(0f, DamageFlashTime - deltaTime);
+    public void AdvanceFeedback(float deltaTime) =>
+        DamageFlashTime = deltaTime >= DamageFlashTime ? 0f : DamageFlashTime - deltaTime;
 }

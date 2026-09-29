@@ -153,7 +153,6 @@ public sealed class EnemyNavigationSystem
                 retainedBirds[enemyIndex].EnemyId = ordered[enemyIndex].Id;
             }
             var enemy = ordered[enemyIndex];
-            enemy.AdvanceFeedback(deltaTime);
             enemy.RepathTimer += deltaTime;
             if (enemy.RepathTimer >= RepathInterval)
             {

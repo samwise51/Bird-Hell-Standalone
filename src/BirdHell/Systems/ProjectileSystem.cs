@@ -7,10 +7,12 @@ namespace BirdHell.Systems;
 public interface IDamageable
 {
     bool CanTakeDamage => true;
-    void TakeDamage(int damage);
+    DamageResult TakeDamage(int damage);
 }
 
+public readonly record struct DamageResult(bool Applied, bool Killed);
 public readonly record struct ProjectileTarget(IDamageable Damageable, Vector2 Center, float Radius);
+public readonly record struct ProjectileStepResult(int DamageEvents, int DeathEvents);
 
 public sealed class ProjectileSystem
 {
@@ -36,11 +38,13 @@ public sealed class ProjectileSystem
 
     public void Clear() => _projectiles.Clear();
 
-    public void Step(float deltaTime, IEnumerable<ProjectileTarget>? targets = null)
+    public ProjectileStepResult Step(float deltaTime, IEnumerable<ProjectileTarget>? targets = null)
     {
         if (!float.IsFinite(deltaTime) || deltaTime <= 0f || deltaTime > 1f)
             throw new ArgumentOutOfRangeException(nameof(deltaTime));
         var targetArray = targets?.ToArray() ?? [];
+        var damageEvents = 0;
+        var deathEvents = 0;
 
         for (var index = _projectiles.Count - 1; index >= 0; index--)
         {
@@ -55,7 +59,9 @@ public sealed class ProjectileSystem
 
             if (targetHit is not null && (!terrainHit || targetFraction <= terrainFraction))
             {
-                targetHit.TakeDamage(projectile.Damage);
+                var damage = targetHit.TakeDamage(projectile.Damage);
+                if (damage.Applied) damageEvents++;
+                if (damage.Killed) deathEvents++;
                 _projectiles.RemoveAt(index);
                 continue;
             }
@@ -70,6 +76,7 @@ public sealed class ProjectileSystem
             if (projectile.MaximumLifetime is { } lifetime && projectile.Age >= lifetime)
                 _projectiles.RemoveAt(index);
         }
+        return new ProjectileStepResult(damageEvents, deathEvents);
     }
 
     private static IDamageable? FindFirstTargetHit(

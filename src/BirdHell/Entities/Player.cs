@@ -17,6 +17,7 @@ public readonly record struct PlayerCollider(float Width, float Height, Vector2 
 public sealed class Player : Systems.IDamageable
 {
     public const int DefaultMaximumHealth = 100;
+    public const float DamageFlashDuration = 0.5f;
 
     public Player(Vector2 position, PlayerCollider? collider = null)
     {
@@ -40,20 +41,23 @@ public sealed class Player : Systems.IDamageable
 
     public Vector2 ColliderCenter => Position + Collider.Offset;
 
-    public void TakeDamage(int damage)
+    public Systems.DamageResult TakeDamage(int damage)
     {
         if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));
-        if (!IsAlive || damage == 0) return;
+        if (!IsAlive || damage == 0) return default;
         Health = Math.Max(0, Health - damage);
-        DamageFlashTime = 0.15f;
-        if (Health == 0)
+        DamageFlashTime = DamageFlashDuration;
+        var killed = Health == 0;
+        if (killed)
         {
             IsAlive = false;
             Velocity = Vector2.Zero;
         }
+        return new Systems.DamageResult(true, killed);
     }
 
-    public void AdvanceFeedback(float deltaTime) => DamageFlashTime = MathF.Max(0f, DamageFlashTime - deltaTime);
+    public void AdvanceFeedback(float deltaTime) =>
+        DamageFlashTime = deltaTime >= DamageFlashTime ? 0f : DamageFlashTime - deltaTime;
 
     public void Reset(Vector2 position)
     {
