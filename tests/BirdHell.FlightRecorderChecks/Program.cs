@@ -13,6 +13,122 @@ Directory.CreateDirectory(temporaryRoot);
 
 try
 {
+    var disabledStallRoot = Path.Combine(temporaryRoot, "stall-disabled");
+    var disabledStallDiagnostics = FrameStallDiagnostics.Start(new FrameStallDiagnosticOptions
+    {
+        Enabled = false,
+        OutputDirectory = disabledStallRoot,
+    }, false);
+    Assert(disabledStallDiagnostics is null && !Directory.Exists(disabledStallRoot),
+        "Disabled stall diagnostics created state or output.");
+    Assert(!FrameStallDiagnostics.IsLongFrame(FrameStallDiagnostics.ThresholdStopwatchTicks - 1) &&
+           FrameStallDiagnostics.IsLongFrame(FrameStallDiagnostics.ThresholdStopwatchTicks),
+        "Stall threshold boundary was not exact.");
+    Assert(!FrameStallDiagnostics.IsLongNestedSection(FrameStallDiagnostics.NestedThresholdStopwatchTicks - 1) &&
+           FrameStallDiagnostics.IsLongNestedSection(FrameStallDiagnostics.NestedThresholdStopwatchTicks),
+        "Nested stall threshold boundary was not exact.");
+    Assert(!FrameStallDiagnostics.IsLongFineNestedSection(
+               FrameStallDiagnostics.FineNestedThresholdStopwatchTicks - 1) &&
+           FrameStallDiagnostics.IsLongFineNestedSection(
+               FrameStallDiagnostics.FineNestedThresholdStopwatchTicks),
+        "Fine nested stall threshold boundary was not exact.");
+
+    var stallRoot = Path.Combine(temporaryRoot, "stall-enabled");
+    var stallDiagnostics = FrameStallDiagnostics.Start(new FrameStallDiagnosticOptions
+    {
+        Enabled = true,
+        OutputDirectory = stallRoot,
+    }, false)!;
+    var rootEnd = FrameStallDiagnostics.Capture();
+    var rootStart = rootEnd with
+    {
+        Timestamp = rootEnd.Timestamp - FrameStallDiagnostics.ThresholdStopwatchTicks,
+    };
+    var eventGroupId = stallDiagnostics.RecordRootSection(
+        "update", new StallSectionTiming(rootStart, rootEnd), TimeSpan.FromSeconds(12.5), 3);
+    var nestedEnd = FrameStallDiagnostics.Capture();
+    var nestedStart = nestedEnd with
+    {
+        Timestamp = nestedEnd.Timestamp - FrameStallDiagnostics.NestedThresholdStopwatchTicks,
+    };
+    Assert(stallDiagnostics.RecordNestedSection(
+            "gamepad_poll", "input_poll", eventGroupId,
+            new StallSectionTiming(nestedStart, nestedEnd), TimeSpan.FromSeconds(12.5)),
+        "Nested section at the threshold was not recorded.");
+    Assert(!stallDiagnostics.RecordNestedSection(
+            "fast_section", "update", eventGroupId,
+            new StallSectionTiming(
+                nestedEnd with { Timestamp = nestedEnd.Timestamp - FrameStallDiagnostics.NestedThresholdStopwatchTicks + 1 },
+                nestedEnd),
+            TimeSpan.FromSeconds(12.5)),
+        "Nested section below the threshold was recorded.");
+    var fineEnd = FrameStallDiagnostics.Capture();
+    var fineStart = fineEnd with
+    {
+        Timestamp = fineEnd.Timestamp - FrameStallDiagnostics.FineNestedThresholdStopwatchTicks,
+    };
+    Assert(stallDiagnostics.RecordFineNestedSection(
+            "a_star",
+            "bird_4_repath",
+            eventGroupId,
+            new StallSectionTiming(fineStart, fineEnd),
+            TimeSpan.FromSeconds(12.5)),
+        "Fine navigation section at the threshold was not recorded.");
+    var drawEventGroupId = stallDiagnostics.RecordRootSection(
+        "draw", new StallSectionTiming(rootStart, rootEnd), TimeSpan.FromSeconds(13));
+    Assert(stallDiagnostics.RecordNestedSection(
+            "sprite_batch_end",
+            "enemy_sprite_batch",
+            drawEventGroupId,
+            new StallSectionTiming(nestedStart, nestedEnd),
+            TimeSpan.FromSeconds(13)),
+        "Slow Draw child was not recorded.");
+    var stallOutput = stallDiagnostics.OutputFile;
+    stallDiagnostics.Dispose();
+    var stallDocuments = File.ReadLines(stallOutput).Select(line => JsonDocument.Parse(line)).ToArray();
+    try
+    {
+        Assert(stallDocuments.Length == 5, "Stall output did not contain the expected grouped events.");
+        var root = stallDocuments[0].RootElement;
+        var child = stallDocuments[1].RootElement;
+        var fineChild = stallDocuments[2].RootElement;
+        var drawRoot = stallDocuments[3].RootElement;
+        var drawChild = stallDocuments[4].RootElement;
+        Assert(root.GetProperty("section").GetString() == "update" &&
+               root.GetProperty("gameTimeSeconds").GetDouble() == 12.5 &&
+               root.GetProperty("fixedStepCount").GetInt32() == 3 &&
+               root.GetProperty("simulationCatchUp").GetBoolean() &&
+               !root.GetProperty("flightRecorderEnabled").GetBoolean() &&
+               root.GetProperty("gcCollections").TryGetProperty("gen0Delta", out _) &&
+               root.GetProperty("measurementScope").GetString()!.Contains("Update override"),
+            "Root stall event omitted section, boundary, timing, catch-up, recorder, or GC details.");
+        Assert(child.GetProperty("section").GetString() == "gamepad_poll" &&
+               child.GetProperty("parentSection").GetString() == "input_poll" &&
+               child.GetProperty("eventGroupId").GetInt64() == root.GetProperty("eventGroupId").GetInt64() &&
+               child.GetProperty("thresholdMilliseconds").GetDouble() ==
+               FrameStallDiagnostics.NestedThresholdMilliseconds,
+            "Nested stall event omitted its parent, event group, or nested threshold.");
+        Assert(fineChild.GetProperty("section").GetString() == "a_star" &&
+               fineChild.GetProperty("parentSection").GetString() == "bird_4_repath" &&
+               fineChild.GetProperty("eventGroupId").GetInt64() == root.GetProperty("eventGroupId").GetInt64() &&
+               fineChild.GetProperty("thresholdMilliseconds").GetDouble() ==
+               FrameStallDiagnostics.FineNestedThresholdMilliseconds,
+            "Fine navigation event omitted its parent, event group, or threshold.");
+        Assert(drawRoot.GetProperty("section").GetString() == "draw" &&
+               drawRoot.GetProperty("measurementScope").GetString()!.Contains("Draw override") &&
+               drawChild.GetProperty("section").GetString() == "sprite_batch_end" &&
+               drawChild.GetProperty("parentSection").GetString() == "enemy_sprite_batch" &&
+               drawChild.GetProperty("eventGroupId").GetInt64() ==
+               drawRoot.GetProperty("eventGroupId").GetInt64() &&
+               drawRoot.GetProperty("eventGroupId").GetInt64() != root.GetProperty("eventGroupId").GetInt64(),
+            "Draw root/child grouping or boundary description was incorrect.");
+    }
+    finally
+    {
+        foreach (var document in stallDocuments) document.Dispose();
+    }
+    Pass("stall diagnostics are opt-in, thresholded, grouped, and emit focused timing details");
+
     var complex = CaveGenerationProfiles.Select(CaveGenerationProfile.Complex);
     var disabledRoot = Path.Combine(temporaryRoot, "disabled");
     var disabledRun = new MainScreenRun("flight-recorder-disabled", complex);
@@ -30,9 +146,12 @@ try
         "--flight-recorder-dir", Path.Combine(temporaryRoot, "parsed"),
         "--flight-recorder-max-mb", "3",
         "--flight-recorder-incident-max-mb", "2",
+        "--stall-diagnostics",
+        "--stall-diagnostics-dir", Path.Combine(temporaryRoot, "parsed-stalls"),
     ]);
     Assert(parsed.CaveProfile.Profile == CaveGenerationProfile.Extreme && parsed.FlightRecorder.Enabled &&
-           parsed.FlightRecorder.MaximumEventMegabytes == 3 && parsed.FlightRecorder.MaximumIncidentMegabytes == 2,
+           parsed.FlightRecorder.MaximumEventMegabytes == 3 && parsed.FlightRecorder.MaximumIncidentMegabytes == 2 &&
+           parsed.StallDiagnostics.Enabled,
         "Combined command-line parsing lost profile or recorder settings.");
     Assert(CaveProfileCommandLine.Parse([]).Profile == CaveGenerationProfile.Baseline,
         "Legacy cave-profile default changed.");

@@ -1,4 +1,5 @@
 using System.Numerics;
+using BirdHell.Diagnostics;
 using BirdHell.Entities;
 using BirdHell.World;
 
@@ -50,6 +51,35 @@ public sealed record EnemyNavigationDiagnostics(
     bool CollidedWithTerrainThisStep,
     PathfindingAttemptDiagnostics? LastPathfindingAttempt);
 
+internal struct EnemyNavigationStepTimings
+{
+    public StallSectionTiming Preparation;
+    public EnemyNavigationBirdTimings[]? Birds;
+    public int BirdCount;
+    public StallSectionTiming Separation;
+    public StallSectionTiming StateUpdate;
+}
+
+internal struct EnemyNavigationBirdTimings
+{
+    public int EnemyId;
+    public bool Repathed;
+    public StallSectionTiming Total;
+    public StallSectionTiming Repath;
+    public EnemyRepathTimings RepathDetails;
+    public StallSectionTiming MovementAndSteering;
+}
+
+internal struct EnemyRepathTimings
+{
+    public StallSectionTiming EndpointResolution;
+    public StallSectionTiming StartRadiusClearSearch;
+    public StallSectionTiming DestinationRadiusClearSearch;
+    public StallSectionTiming ResolvedEndpointValidation;
+    public StallSectionTiming AStar;
+    public StallSectionTiming DirectTargetCheck;
+}
+
 public sealed class EnemyNavigationSystem
 {
     public const float MaximumAcceleration = 10f;
@@ -80,21 +110,64 @@ public sealed class EnemyNavigationSystem
 
     public void Step(IReadOnlyList<Enemy> enemies, Vector2 playerPosition, float deltaTime)
     {
+        var unusedTimings = default(EnemyNavigationStepTimings);
+        StepCore(enemies, playerPosition, deltaTime, ref unusedTimings, false);
+    }
+
+    internal void Step(
+        IReadOnlyList<Enemy> enemies,
+        Vector2 playerPosition,
+        float deltaTime,
+        ref EnemyNavigationStepTimings timings) =>
+        StepCore(enemies, playerPosition, deltaTime, ref timings, true);
+
+    private void StepCore(
+        IReadOnlyList<Enemy> enemies,
+        Vector2 playerPosition,
+        float deltaTime,
+        ref EnemyNavigationStepTimings timings,
+        bool captureTimings)
+    {
+        var timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         if (deltaTime <= 0f || !float.IsFinite(deltaTime)) throw new ArgumentOutOfRangeException(nameof(deltaTime));
         var ordered = enemies.Where(enemy => enemy.IsAlive).OrderBy(enemy => enemy.Id).ToArray();
         var previousCenters = ordered.Select(enemy => enemy.ColliderCenter).ToArray();
         var previousPlayerDistances = ordered.Select(
             enemy => Vector2.Distance(enemy.ColliderCenter, playerPosition)).ToArray();
         var collided = new bool[ordered.Length];
+        if (captureTimings)
+        {
+            timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
+            if (timings.Birds is null || timings.Birds.Length < ordered.Length)
+                timings.Birds = new EnemyNavigationBirdTimings[ordered.Length];
+            timings.BirdCount = ordered.Length;
+        }
+
         for (var enemyIndex = 0; enemyIndex < ordered.Length; enemyIndex++)
         {
+            var birdTimingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+            if (captureTimings)
+            {
+                var retainedBirds = timings.Birds!;
+                retainedBirds[enemyIndex] = default;
+                retainedBirds[enemyIndex].EnemyId = ordered[enemyIndex].Id;
+            }
             var enemy = ordered[enemyIndex];
             enemy.AdvanceFeedback(deltaTime);
             enemy.RepathTimer += deltaTime;
             if (enemy.RepathTimer >= RepathInterval)
             {
+                var repathTimingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
                 enemy.RepathTimer %= RepathInterval;
-                var attempt = FindPath(enemy.ColliderCenter, playerPosition, enemy.ColliderRadius);
+                PathfindingAttempt attempt;
+                if (captureTimings)
+                    attempt = FindPath(
+                        enemy.ColliderCenter,
+                        playerPosition,
+                        enemy.ColliderRadius,
+                        ref timings.Birds![enemyIndex].RepathDetails);
+                else
+                    attempt = FindPath(enemy.ColliderCenter, playerPosition, enemy.ColliderRadius);
                 GetMotionState(enemy.Id).LastPathfindingAttempt = attempt.Diagnostics;
                 var newPath = attempt.Path;
                 if (newPath is { Count: > 0 })
@@ -104,8 +177,14 @@ public sealed class EnemyNavigationSystem
                     enemy.SuccessfulRepathCount++;
                 }
                 else enemy.FailedRepathCount++;
+                if (captureTimings)
+                {
+                    timings.Birds![enemyIndex].Repathed = true;
+                    timings.Birds[enemyIndex].Repath = FrameStallDiagnostics.Complete(repathTimingStart);
+                }
             }
 
+            var movementTimingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
             AdvanceWaypoint(enemy);
             var desiredVelocity = GetDesiredVelocity(enemy);
             enemy.Velocity = MoveTowards(enemy.Velocity, desiredVelocity, MaximumAcceleration * deltaTime);
@@ -119,8 +198,19 @@ public sealed class EnemyNavigationSystem
             enemy.Position = center - enemy.ColliderOffset;
             enemy.Velocity = velocity;
             enemy.UpdateFacingFromHorizontalMovement(enemy.Velocity.X);
+            if (captureTimings)
+            {
+                timings.Birds![enemyIndex].MovementAndSteering =
+                    FrameStallDiagnostics.Complete(movementTimingStart);
+                timings.Birds[enemyIndex].Total = FrameStallDiagnostics.Complete(birdTimingStart);
+            }
         }
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         if (_enableEnemySeparation) SeparateEnemies(enemies);
+        if (captureTimings) timings.Separation = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         for (var enemyIndex = 0; enemyIndex < ordered.Length; enemyIndex++)
         {
             var enemy = ordered[enemyIndex];
@@ -140,6 +230,7 @@ public sealed class EnemyNavigationSystem
                 : MathF.Max(0f, state.RecentCollisionTime - deltaTime);
             if (collided[enemyIndex]) state.TerrainCollisionCount++;
         }
+        if (captureTimings) timings.StateUpdate = FrameStallDiagnostics.Complete(timingStart);
     }
 
     public IReadOnlyList<EnemyNavigationDiagnostics> GetDiagnostics(
@@ -179,6 +270,25 @@ public sealed class EnemyNavigationSystem
 
     private PathfindingAttempt FindPath(Vector2 start, Vector2 target, float radius)
     {
+        var unusedTimings = default(EnemyRepathTimings);
+        return FindPathCore(start, target, radius, ref unusedTimings, false);
+    }
+
+    private PathfindingAttempt FindPath(
+        Vector2 start,
+        Vector2 target,
+        float radius,
+        ref EnemyRepathTimings timings) =>
+        FindPathCore(start, target, radius, ref timings, true);
+
+    private PathfindingAttempt FindPathCore(
+        Vector2 start,
+        Vector2 target,
+        float radius,
+        ref EnemyRepathTimings timings,
+        bool captureTimings)
+    {
+        var timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         var grid = _pathfinder.Grid;
         var startTraversable = grid.IsWorldPositionInTraversableSpace(start);
         var startClear = startTraversable && !_terrain.IntersectsCircle(start, radius);
@@ -189,6 +299,7 @@ public sealed class EnemyNavigationSystem
         var nearestTargetComponent = nearestTargetFound
             ? grid.GetComponentId(nearestTargetCell)
             : NavigationGrid.NoComponent;
+        if (captureTimings) timings.EndpointResolution = FrameStallDiagnostics.Complete(timingStart);
 
         NavigationCell? startCell = null;
         NavigationCell? resolvedCell = null;
@@ -202,33 +313,62 @@ public sealed class EnemyNavigationSystem
 
         if (!startTraversable) failure = PathfindingFailureReason.InvalidStartWorldPosition;
         else if (!startClear) failure = PathfindingFailureReason.StartLacksRadiusClearance;
-        else if (!TryFindNearestRadiusClearCell(
-                     start, AStarPathfinder.MaximumNearestNodeDistance, null, radius, out var foundStartCell))
-            failure = PathfindingFailureReason.NoStartCell;
         else
         {
-            startCell = foundStartCell;
-            startComponent = grid.GetComponentId(foundStartCell);
-            if (!TryFindNearestRadiusClearCell(
-                    target, AStarPathfinder.MaximumNearestNodeDistance, startComponent, radius, out var foundDestination))
-                failure = PathfindingFailureReason.NoReachableDestinationCell;
+            timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+            var foundStart = TryFindNearestRadiusClearCell(
+                start,
+                AStarPathfinder.MaximumNearestNodeDistance,
+                null,
+                radius,
+                out var foundStartCell);
+            if (captureTimings)
+                timings.StartRadiusClearSearch = FrameStallDiagnostics.Complete(timingStart);
+            if (!foundStart) failure = PathfindingFailureReason.NoStartCell;
             else
             {
-                resolvedCell = foundDestination;
-                resolvedComponent = grid.GetComponentId(foundDestination);
-                resolvedWalkable = grid.IsWalkable(foundDestination);
-                var resolvedWorld = grid.CellToWorld(foundDestination);
-                resolvedClear = !_terrain.IntersectsCircle(resolvedWorld, radius);
-                if (!resolvedClear) failure = PathfindingFailureReason.ResolvedDestinationLacksRadiusClearance;
+                startCell = foundStartCell;
+                startComponent = grid.GetComponentId(foundStartCell);
+
+                timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+                var foundDestinationCell = TryFindNearestRadiusClearCell(
+                    target,
+                    AStarPathfinder.MaximumNearestNodeDistance,
+                    startComponent,
+                    radius,
+                    out var foundDestination);
+                if (captureTimings)
+                    timings.DestinationRadiusClearSearch = FrameStallDiagnostics.Complete(timingStart);
+                if (!foundDestinationCell) failure = PathfindingFailureReason.NoReachableDestinationCell;
                 else
                 {
-                    path = _pathfinder.FindPath(foundStartCell, foundDestination);
-                    if (path is null) failure = PathfindingFailureReason.AStarFailedWithValidEndpoints;
-                    else if (targetClear && HasClearRoute(resolvedWorld, target, radius) &&
-                             Vector2.DistanceSquared(path[^1], target) > 0.000001f)
+                    timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+                    resolvedCell = foundDestination;
+                    resolvedComponent = grid.GetComponentId(foundDestination);
+                    resolvedWalkable = grid.IsWalkable(foundDestination);
+                    var resolvedWorld = grid.CellToWorld(foundDestination);
+                    resolvedClear = !_terrain.IntersectsCircle(resolvedWorld, radius);
+                    if (captureTimings)
+                        timings.ResolvedEndpointValidation = FrameStallDiagnostics.Complete(timingStart);
+                    if (!resolvedClear) failure = PathfindingFailureReason.ResolvedDestinationLacksRadiusClearance;
+                    else
                     {
-                        path = path.Append(target).ToArray();
-                        directTargetAppended = true;
+                        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+                        path = _pathfinder.FindPath(foundStartCell, foundDestination);
+                        if (captureTimings) timings.AStar = FrameStallDiagnostics.Complete(timingStart);
+                        if (path is null) failure = PathfindingFailureReason.AStarFailedWithValidEndpoints;
+                        else
+                        {
+                            timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+                            if (targetClear && HasClearRoute(resolvedWorld, target, radius) &&
+                                Vector2.DistanceSquared(path[^1], target) > 0.000001f)
+                            {
+                                path = path.Append(target).ToArray();
+                                directTargetAppended = true;
+                            }
+                            if (captureTimings)
+                                timings.DirectTargetCheck = FrameStallDiagnostics.Complete(timingStart);
+                        }
                     }
                 }
             }

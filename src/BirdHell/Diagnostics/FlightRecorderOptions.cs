@@ -24,7 +24,8 @@ public sealed record FlightRecorderOptions
 
 public sealed record BirdHellCommandLineOptions(
     World.CaveGenerationProfileSelection CaveProfile,
-    FlightRecorderOptions FlightRecorder);
+    FlightRecorderOptions FlightRecorder,
+    FrameStallDiagnosticOptions StallDiagnostics);
 
 public static class BirdHellCommandLine
 {
@@ -32,6 +33,8 @@ public static class BirdHellCommandLine
     public const string RecorderDirectoryOption = "--flight-recorder-dir";
     public const string RecorderMaximumMegabytesOption = "--flight-recorder-max-mb";
     public const string RecorderIncidentMaximumMegabytesOption = "--flight-recorder-incident-max-mb";
+    public const string EnableStallDiagnosticsOption = "--stall-diagnostics";
+    public const string StallDiagnosticsDirectoryOption = "--stall-diagnostics-dir";
 
     public static BirdHellCommandLineOptions Parse(IReadOnlyList<string> arguments)
     {
@@ -42,6 +45,9 @@ public static class BirdHellCommandLine
         string? directory = null;
         var eventMegabytes = FlightRecorderOptions.DefaultMaximumEventMegabytes;
         var incidentMegabytes = FlightRecorderOptions.DefaultMaximumIncidentMegabytes;
+        var stallDiagnosticsEnabled = false;
+        var stallEnableOptionSeen = false;
+        string? stallDiagnosticsDirectory = null;
 
         for (var index = 0; index < arguments.Count; index++)
         {
@@ -66,6 +72,18 @@ public static class BirdHellCommandLine
                     incidentMegabytes = ReadPositiveInteger(arguments, ref index, argument);
                     enabled = true;
                     break;
+                case EnableStallDiagnosticsOption:
+                    if (stallEnableOptionSeen)
+                        throw new ArgumentException($"Option '{EnableStallDiagnosticsOption}' may be specified only once.");
+                    stallEnableOptionSeen = true;
+                    stallDiagnosticsEnabled = true;
+                    break;
+                case StallDiagnosticsDirectoryOption:
+                    if (stallDiagnosticsDirectory is not null)
+                        throw new ArgumentException($"Option '{StallDiagnosticsDirectoryOption}' may be specified only once.");
+                    stallDiagnosticsDirectory = ReadValue(arguments, ref index, argument);
+                    stallDiagnosticsEnabled = true;
+                    break;
                 case World.CaveProfileCommandLine.OptionName:
                     caveArguments.Add(argument);
                     caveArguments.Add(ReadValue(arguments, ref index, argument));
@@ -83,6 +101,11 @@ public static class BirdHellCommandLine
                 OutputDirectory = directory,
                 MaximumEventMegabytes = eventMegabytes,
                 MaximumIncidentMegabytes = incidentMegabytes,
+            },
+            new FrameStallDiagnosticOptions
+            {
+                Enabled = stallDiagnosticsEnabled,
+                OutputDirectory = stallDiagnosticsDirectory,
             });
     }
 

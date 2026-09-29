@@ -23,6 +23,28 @@ dotnet build BirdHell.sln
 dotnet run --project src/BirdHell/BirdHell.csproj
 ```
 
+To capture only Update, Draw, simulation catch-up, input-polling, or between-callback delays of at least
+100 ms, enable the development stall diagnostics:
+
+```sh
+dotnet run --project src/BirdHell/BirdHell.csproj -- --stall-diagnostics
+```
+
+The JSONL output path is printed to the terminal at startup. Root Update/Draw/callback events retain the
+100 ms threshold. When Update is slow, its keyboard, mouse, per-controller gamepad, input-adapter,
+lifecycle, accumulator, simulation, and base-Update children use a 25 ms threshold and share an event-group
+ID. Slow simulation steps are further divided by gameplay system. Use `--stall-diagnostics-dir <directory>`
+ID. Slow simulation steps are further divided by gameplay system. Slow Draw calls are divided into clear,
+environment layers, camera/cave work, entity submissions, SpriteBatch Begin/End calls, debug overlays, and
+base Draw. Use `--stall-diagnostics-dir <directory>` to select the output directory. Stall diagnostics and
+the much heavier Flight Recorder are independent. Within an already-slow enemy-navigation section,
+5 ms fine-grained records distinguish each bird's repath, endpoint resolution, radius-clear searches,
+A*, direct-target check, and movement/steering work.
+
+Radius-clear endpoint projection searches deterministic nearest-first grid rings and stops once no unvisited
+cell can beat the selected endpoint. Collider clearance, component constraints, maximum distance, and the
+legacy row-major tie-break remain unchanged; synchronized 0.5-second bird repaths remain unchanged.
+
 ## Controls
 
 - `A` / `D`, Left / Right, or controller left stick: move

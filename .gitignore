@@ -47,3 +47,6 @@ Thumbs.db
 /tools/qc_individual_v2_assets.py
 /tools/qc_v2_runtime_assets.py
 /tools/stage_individual_v2_assets.py
+
+# Local performance diagnostics
+stall-diagnostics/

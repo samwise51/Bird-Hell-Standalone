@@ -1,3 +1,4 @@
+using BirdHell.Diagnostics;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Vector2 = System.Numerics.Vector2;
@@ -48,18 +49,55 @@ public sealed class EnvironmentPresentation : IDisposable
 
     public void DrawSky()
     {
+        var unusedTimings = default(RenderBatchTimings);
+        DrawSkyCore(ref unusedTimings, false);
+    }
+
+    internal void DrawSky(ref RenderBatchTimings timings) => DrawSkyCore(ref timings, true);
+
+    private void DrawSkyCore(ref RenderBatchTimings timings, bool captureTimings)
+    {
+        var timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         var viewport = _graphicsDevice.Viewport;
+        if (captureTimings) timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp,
             DepthStencilState.None, RasterizerState.CullNone);
+        if (captureTimings) timings.Begin = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.Draw(_skyGradient, new Rectangle(0, 0, viewport.Width, viewport.Height), Color.White);
+        if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.End();
+        if (captureTimings) timings.End = FrameStallDiagnostics.Complete(timingStart);
     }
 
     public void DrawClouds(Camera2D camera, CloudAtmosphereState state)
     {
+        var unusedTimings = default(RenderBatchTimings);
+        DrawCloudsCore(camera, state, ref unusedTimings, false);
+    }
+
+    internal void DrawClouds(Camera2D camera, CloudAtmosphereState state, ref RenderBatchTimings timings) =>
+        DrawCloudsCore(camera, state, ref timings, true);
+
+    private void DrawCloudsCore(
+        Camera2D camera,
+        CloudAtmosphereState state,
+        ref RenderBatchTimings timings,
+        bool captureTimings)
+    {
+        var timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(state);
-        if (!state.IsVisible) return;
+        if (!state.IsVisible)
+        {
+            if (captureTimings) timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
+            return;
+        }
         var viewport = _graphicsDevice.Viewport;
         var pixelsPerWorldUnit = viewport.Height / Camera2D.VerticalViewSpan;
         var translation = _cloudSettings.Layer.GetScreenTranslation(camera.Position, pixelsPerWorldUnit);
@@ -72,19 +110,49 @@ public sealed class EnvironmentPresentation : IDisposable
         var centerY = viewport.Height / 2f + translation.Y - motion.Drift.Y * destinationHeight;
         var firstTint = Color.White * (_cloudSettings.Opacity * (1f - motion.Blend));
         var secondTint = Color.White * (_cloudSettings.Opacity * motion.Blend);
+        if (captureTimings) timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
 
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
             DepthStencilState.None, RasterizerState.CullNone);
+        if (captureTimings) timings.Begin = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         DrawCoveringTiles(_cloudFrames[motion.FirstFrame], centerX, centerY, destinationWidth, destinationHeight, firstTint);
         if (motion.Blend > 0f)
             DrawCoveringTiles(_cloudFrames[motion.SecondFrame], centerX, centerY, destinationWidth, destinationHeight, secondTint);
+        if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.End();
+        if (captureTimings) timings.End = FrameStallDiagnostics.Complete(timingStart);
     }
 
     public void DrawSceneryLayer(Camera2D camera, EnvironmentSceneryLayer layer)
     {
+        var unusedTimings = default(RenderBatchTimings);
+        DrawSceneryLayerCore(camera, layer, ref unusedTimings, false);
+    }
+
+    internal void DrawSceneryLayer(
+        Camera2D camera,
+        EnvironmentSceneryLayer layer,
+        ref RenderBatchTimings timings) =>
+        DrawSceneryLayerCore(camera, layer, ref timings, true);
+
+    private void DrawSceneryLayerCore(
+        Camera2D camera,
+        EnvironmentSceneryLayer layer,
+        ref RenderBatchTimings timings,
+        bool captureTimings)
+    {
+        var timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         ArgumentNullException.ThrowIfNull(camera);
-        if (_layout is null) return;
+        if (_layout is null)
+        {
+            if (captureTimings) timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
+            return;
+        }
         var layerSettings = _settings.GetLayer(layer);
         var viewport = _graphicsDevice.Viewport;
         var pixelsPerWorldUnit = viewport.Height / Camera2D.VerticalViewSpan;
@@ -92,9 +160,14 @@ public sealed class EnvironmentPresentation : IDisposable
             ? SamplerState.LinearClamp
             : SamplerState.PointClamp;
         var tintVector = Vector3.Clamp(layerSettings.Tint * layerSettings.Brightness, Vector3.Zero, Vector3.One);
+        if (captureTimings) timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
 
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, sampler,
             DepthStencilState.None, RasterizerState.CullNone);
+        if (captureTimings) timings.Begin = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         foreach (var instance in _layout[layer])
         {
             var baseline = layerSettings.Parallax.GetScreenPosition(instance.Position, camera.Position, pixelsPerWorldUnit);
@@ -119,7 +192,11 @@ public sealed class EnvironmentPresentation : IDisposable
                 Microsoft.Xna.Framework.Vector2.Zero,
                 instance.FlipHorizontally ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         }
+        if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
+
+        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _spriteBatch.End();
+        if (captureTimings) timings.End = FrameStallDiagnostics.Complete(timingStart);
     }
 
     private Texture2D CreateSkyGradient(EnvironmentPresentationSettings settings)

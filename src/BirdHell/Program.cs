@@ -13,5 +13,5 @@ catch (ArgumentException exception)
     return;
 }
 
-using var game = new BirdHellGame(options.CaveProfile, options.FlightRecorder);
+using var game = new BirdHellGame(options.CaveProfile, options.FlightRecorder, options.StallDiagnostics);
 game.Run();

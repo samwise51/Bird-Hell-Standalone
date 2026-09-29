@@ -141,15 +141,59 @@ public sealed class MainScreenRun
 
     public MainScreenStepResult Step(PlayerInput input, bool firePressed, float deltaTime)
     {
+        var unusedTimings = default(MainScreenStepTimings);
+        var unusedNavigationTimings = default(EnemyNavigationStepTimings);
+        return StepCore(input, firePressed, deltaTime, ref unusedTimings, ref unusedNavigationTimings, false);
+    }
+
+    internal MainScreenStepResult Step(
+        PlayerInput input,
+        bool firePressed,
+        float deltaTime,
+        ref MainScreenStepTimings timings,
+        ref EnemyNavigationStepTimings navigationTimings) =>
+        StepCore(input, firePressed, deltaTime, ref timings, ref navigationTimings, true);
+
+    private MainScreenStepResult StepCore(
+        PlayerInput input,
+        bool firePressed,
+        float deltaTime,
+        ref MainScreenStepTimings timings,
+        ref EnemyNavigationStepTimings navigationTimings,
+        bool captureTimings)
+    {
+        var timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         var recorderBefore = _flightRecorder?.CaptureBeforeStep(this);
+        if (captureTimings) timings.FlightRecorderBefore = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         var movementResult = PlayerMovement.Step(Player, input, deltaTime);
+        if (captureTimings) timings.PlayerMovement = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         var projectile = _weaponSystem.Fire(WeaponState, Player, firePressed);
         if (projectile is not null) Projectiles.Spawn(projectile);
+        if (captureTimings) timings.Weapon = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         Projectiles.Step(deltaTime, Enemies.CreateProjectileTargets());
-        EnemyNavigation.Step(Enemies.Enemies, Player.Position, deltaTime);
+        if (captureTimings) timings.Projectiles = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
+        if (captureTimings)
+            EnemyNavigation.Step(Enemies.Enemies, Player.Position, deltaTime, ref navigationTimings);
+        else
+            EnemyNavigation.Step(Enemies.Enemies, Player.Position, deltaTime);
+        if (captureTimings) timings.EnemyNavigation = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         _enemyCombat.Step(Enemies.Enemies, Player, deltaTime);
+        if (captureTimings) timings.EnemyCombat = FrameStallDiagnostics.Complete(timing);
+
+        timing = captureTimings ? FrameStallDiagnostics.Capture() : default;
         if (recorderBefore is not null)
             _flightRecorder!.RecordStep(this, recorderBefore, input, firePressed, deltaTime);
+        if (captureTimings) timings.FlightRecorderAfter = FrameStallDiagnostics.Complete(timing);
         return new MainScreenStepResult(movementResult.SecondJumpPerformed);
     }
 
@@ -158,3 +202,14 @@ public sealed class MainScreenRun
 }
 
 public readonly record struct MainScreenStepResult(bool SecondJumpPerformed);
+
+internal struct MainScreenStepTimings
+{
+    public StallSectionTiming FlightRecorderBefore;
+    public StallSectionTiming PlayerMovement;
+    public StallSectionTiming Weapon;
+    public StallSectionTiming Projectiles;
+    public StallSectionTiming EnemyNavigation;
+    public StallSectionTiming EnemyCombat;
+    public StallSectionTiming FlightRecorderAfter;
+}
