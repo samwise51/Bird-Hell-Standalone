@@ -51,13 +51,16 @@ legacy row-major tie-break remain unchanged; synchronized 0.5-second bird repath
 - `SPACE` or controller A: jump (the original controller allows one air jump)
 - `S` or Down: crouch animation only (movement, physics, and collider are unchanged)
 - Left mouse button, Left Ctrl, or controller right trigger: fire once per press/pull in the direction the player faces
-- `R`: start a fresh run with a new cave seed (the standalone production replacement for Unity's Start/`Escape` regeneration)
-- `F5`: debug extension that restarts the run with the exact current seed
+- `R`: start a fresh run with a new cave seed while gameplay is active
+- `F5`: restart the active run with the exact current seed
 - `O`: toggle terrain outlines
 - `C`: toggle the player collider, ground-normal, and fixed-aim/facing debug view
 - `N`: toggle navigation obstacles plus the first living enemy's path and steering target
 - `V`: toggle the procedural cloud atmosphere (presentation only)
-- `ESC`: exit
+- `ESC` or controller Start/Menu: pause during gameplay and resume while paused
+- controller Select/View: Back in nested menus such as Options (it does not pause gameplay)
+- controller B: unused for menu Back/Pause
+- Pause Menu: Resume, same-seed Restart, fresh-seed New Cave, or Return to Main Menu
 
 The game uses a 50 Hz renderer-independent player/projectile/enemy simulation. Its logical 2D camera starts at `(0,0)` and, once per fixed step, lerps toward `player position + (0,1)` by exactly `0.15`. The view always spans 10 world units vertically; viewport aspect determines the horizontal span. There is no clamp, dead zone, or look-ahead, so horizontal and vertical movement remain smooth even beyond cave edges.
 
@@ -74,7 +77,7 @@ Behind the authored scenery, four deterministic `512 × 256` tileable cloud alph
 Each run contains one generated cave, one 100-health player, and exactly 15 birds. The lifecycle has only three derived states:
 
 - `Playing`: the player is alive and at least one bird is alive.
-- `PlayerDead`: health reached zero; movement and firing remain disabled until `R` or `F5` is pressed. Nothing restarts automatically.
+- `PlayerDead`: health reached zero; movement and firing remain disabled until `R`, `F5`, Pause Restart, or Pause New Cave is selected. Nothing restarts automatically.
 - `AllBirdsDead`: the player remains controllable in the current cave; no birds respawn and nothing advances or regenerates until `R` or `F5` is pressed.
 
-Both reset keys replace the cave, collision, player, projectiles, enemies, and navigation as one complete run. The camera retains its current logical position and smoothly travels toward the replacement player; it never retains a player/entity reference. Debug visualization toggles remain selected. `ESC` remains the unambiguous standalone exit key. There are no levels, difficulty progression, scene transitions, score, death screen, or victory screen in the active procedural path.
+Both reset keys replace the cave, collision, player, projectiles, enemies, and navigation as one complete run. Pause Menu Restart and New Cave route through those same reset paths. The camera retains its current logical position and smoothly travels toward the replacement player; it never retains a player/entity reference. Debug visualization toggles remain selected. While paused, simulation and recorder steps stop and the last gameplay frame is shown through a downsampled frosted-glass treatment. There are no levels, difficulty progression, scene transitions, score, death screen, or victory screen in the active procedural path.

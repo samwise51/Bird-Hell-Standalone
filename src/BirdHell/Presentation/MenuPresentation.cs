@@ -43,17 +43,19 @@ public sealed class MenuPresentation : IDisposable
         return null;
     }
 
-    public void Draw(GameFlow flow, double totalSeconds)
+    public void Draw(GameFlow flow, double totalSeconds, bool drawBackdrop = true)
     {
         var viewport = _graphics.Viewport.Bounds;
         var controls = Layout(flow.Screen, viewport);
         var pulse = MenuPulse.Value(totalSeconds);
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
-        DrawBackdrop(viewport, totalSeconds);
+        if (drawBackdrop) DrawBackdrop(viewport, totalSeconds);
         if (flow.Screen == GameScreen.MainMenu)
             DrawMainMenu(flow, controls, pulse, viewport);
-        else
+        else if (flow.Screen == GameScreen.Options)
             DrawOptions(flow, controls, pulse, viewport);
+        else if (flow.Screen == GameScreen.Paused)
+            DrawPause(flow, controls, pulse, viewport);
         _batch.End();
     }
 
@@ -85,8 +87,19 @@ public sealed class MenuPresentation : IDisposable
         for (var index = 0; index < 4; index++)
             DrawOptionRow(controls[index], labels[index], values[index], index == flow.FocusedIndex, pulse);
         DrawButton(controls[4].Bounds, "BACK", flow.FocusedIndex == 4, pulse);
-        DrawCenteredText("LEFT / RIGHT TO CHANGE     ESC / B TO GO BACK", viewport.Center.X,
+        DrawCenteredText("LEFT / RIGHT TO CHANGE     ESC / VIEW TO GO BACK", viewport.Center.X,
             viewport.Bottom - 30, 2, new Color(125, 119, 155));
+    }
+
+    private void DrawPause(GameFlow flow, IReadOnlyList<Control> controls, float pulse, Rectangle viewport)
+    {
+        DrawCenteredText("PAUSED", viewport.Center.X, Math.Max(62, viewport.Height / 8), 7,
+            new Color(255, 224, 238));
+        var labels = new[] { "RESUME", "RESTART", "NEW CAVE", "RETURN TO MAIN MENU" };
+        for (var index = 0; index < controls.Count; index++)
+            DrawButton(controls[index].Bounds, labels[index], index == flow.FocusedIndex, pulse);
+        DrawCenteredText("ESC / MENU TO RESUME", viewport.Center.X,
+            viewport.Bottom - 38, 2, new Color(174, 164, 198));
     }
 
     private void DrawButton(Rectangle bounds, string label, bool focused, float pulse)
@@ -182,6 +195,16 @@ public sealed class MenuPresentation : IDisposable
             var top = Math.Max(220, viewport.Height / 3);
             return Enumerable.Range(0, 3)
                 .Select(index => new Control(new Rectangle(centerX - width / 2, top + index * 92, width, 64)))
+                .ToArray();
+        }
+
+        if (screen == GameScreen.Paused)
+        {
+            var width = Math.Min(470, viewport.Width - 60);
+            var top = Math.Max(105, viewport.Height / 4);
+            var spacing = Math.Clamp((viewport.Height - top - 70) / 4, 62, 78);
+            return Enumerable.Range(0, 4)
+                .Select(index => new Control(new Rectangle(centerX - width / 2, top + index * spacing, width, 58)))
                 .ToArray();
         }
 

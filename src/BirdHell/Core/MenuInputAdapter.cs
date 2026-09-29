@@ -35,8 +35,12 @@ public sealed class MenuInputAdapter
         var action = MenuAction.None;
         if (_initialized)
         {
-            if (Pressed(keyboard, Keys.Escape) || PadPressed(gamePad, Buttons.B, controllerChanged))
+            if (Pressed(keyboard, Keys.Escape))
+                action = MenuAction.Escape;
+            else if (PadPressed(gamePad, Buttons.Back, controllerChanged))
                 action = MenuAction.Back;
+            else if (PadPressed(gamePad, Buttons.Start, controllerChanged))
+                action = MenuAction.TogglePause;
             else if (Pressed(keyboard, Keys.Up) || PadPressed(gamePad, Buttons.DPadUp, controllerChanged) ||
                      stickY > 0 && _previousStickY <= 0)
                 action = MenuAction.Previous;

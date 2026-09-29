@@ -25,6 +25,7 @@ public sealed class BirdHellGame : Game
     private EnvironmentPresentation? _environmentPresentation;
     private GameplayAudio? _audio;
     private MenuPresentation? _menuPresentation;
+    private FrostedFramePresentation? _frostedFrame;
     private MainScreenRun? _run;
     private VertexPositionColor[] _terrainVertices = [];
     private int[] _triangleIndices = [];
@@ -109,6 +110,7 @@ public sealed class BirdHellGame : Game
         _audio = new GameplayAudio(Content);
         _audio.StartMusic();
         _menuPresentation = new MenuPresentation(GraphicsDevice);
+        _frostedFrame = new FrostedFramePresentation(GraphicsDevice);
         if (_run is not null)
             _environmentPresentation.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
         _effect = new BasicEffect(GraphicsDevice)
@@ -163,11 +165,15 @@ public sealed class BirdHellGame : Game
         if (_flow.Screen != GameScreen.MainMenu || menuAction != MenuAction.Back)
             flowResult = _flow.Handle(menuAction);
         ApplyFlowResult(flowResult);
+        var gameplayTransitionThisFrame = flowResult.PauseGameplay || flowResult.ResumeGameplay ||
+                                          flowResult.RestartGameplay || flowResult.StartNewCave;
+        if (_flow.Screen != GameScreen.Gameplay)
+            _gameplayInput.ClearBufferedEdges();
         if (_stallDiagnostics is not null) timings.ExitKeyHandling = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         var resetThisFrame = false;
-        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.R))
+        if (_flow.GameplayCanAdvance && WasPressed(keyboardState, Keys.R))
         {
             var resetTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _run?.StartNewRun();
@@ -179,7 +185,7 @@ public sealed class BirdHellGame : Game
                 timings.HostReset = FrameStallDiagnostics.Complete(resetTimingStart);
             resetThisFrame = true;
         }
-        else if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.F5))
+        else if (_flow.GameplayCanAdvance && WasPressed(keyboardState, Keys.F5))
         {
             var resetTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _run?.RestartSameSeed();
@@ -195,22 +201,22 @@ public sealed class BirdHellGame : Game
             timings.LifecycleKeyHandling = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.O))
+        if (_flow.GameplayCanAdvance && WasPressed(keyboardState, Keys.O))
         {
             _debug.ToggleOutlines();
             UpdateWindowTitle();
         }
-        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.C))
+        if (_flow.GameplayCanAdvance && WasPressed(keyboardState, Keys.C))
         {
             _debug.ToggleCollision();
             UpdateWindowTitle();
         }
-        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.N))
+        if (_flow.GameplayCanAdvance && WasPressed(keyboardState, Keys.N))
         {
             _debug.ToggleNavigation();
             UpdateWindowTitle();
         }
-        if (_flow.Screen == GameScreen.Gameplay && WasPressed(keyboardState, Keys.V))
+        if (_flow.GameplayCanAdvance && WasPressed(keyboardState, Keys.V))
         {
             _atmosphere.ToggleVisibility();
             UpdateWindowTitle();
@@ -219,12 +225,13 @@ public sealed class BirdHellGame : Game
             timings.DebugKeyHandling = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-        _atmosphere.Advance(gameTime.ElapsedGameTime.TotalSeconds);
+        if (_flow.GameplayCanAdvance && !gameplayTransitionThisFrame)
+            _atmosphere.Advance(gameTime.ElapsedGameTime.TotalSeconds);
         if (_stallDiagnostics is not null)
             timings.AtmosphereAdvance = FrameStallDiagnostics.Complete(timingStart);
 
         var fixedStepCount = 0;
-        if (_flow.Screen == GameScreen.Gameplay && _run is not null && !resetThisFrame)
+        if (_flow.GameplayCanAdvance && _run is not null && !resetThisFrame && !gameplayTransitionThisFrame)
         {
             timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _simulationAccumulator += Math.Min(gameTime.ElapsedGameTime.TotalSeconds, MaximumFrameTime);
@@ -285,30 +292,69 @@ public sealed class BirdHellGame : Game
         _stallDiagnostics?.ObserveCallbackStart("draw", gameTime.TotalGameTime);
 
         var timings = default(DrawTimings);
-        var timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-        GraphicsDevice.Clear(new Color(16, 23, 47));
-        if (_stallDiagnostics is not null) timings.GraphicsClear = FrameStallDiagnostics.Complete(timingStart);
-
-        if (_flow.Screen != GameScreen.Gameplay)
+        if (_stallDiagnostics is not null)
         {
+            Array.Clear(_sceneryLayerTimings);
+            Array.Clear(_sceneryBatchTimings);
+        }
+
+        var timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+        if (_flow.Screen is GameScreen.MainMenu or GameScreen.Options)
+        {
+            GraphicsDevice.SetRenderTarget(null);
+            GraphicsDevice.Clear(new Color(16, 23, 47));
+            if (_stallDiagnostics is not null) timings.GraphicsClear = FrameStallDiagnostics.Complete(timingStart);
             timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             _menuPresentation?.Draw(_flow, gameTime.TotalGameTime.TotalSeconds);
             if (_stallDiagnostics is not null) timings.MenuRender = FrameStallDiagnostics.Complete(timingStart);
-            timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-            base.Draw(gameTime);
-            if (_stallDiagnostics is not null)
+        }
+        else if (_frostedFrame is not null)
+        {
+            var destination = GraphicsDevice.Viewport.Bounds;
+            var captureNeeded = _flow.Screen == GameScreen.Gameplay ||
+                                !_frostedFrame.HasCompatibleFrame(destination.Width, destination.Height);
+            if (captureNeeded)
             {
-                timings.BaseDraw = FrameStallDiagnostics.Complete(timingStart);
-                var menuEventGroupId = _stallDiagnostics.RecordRootSection(
-                    "draw", FrameStallDiagnostics.Complete(drawTimingStart), gameTime.TotalGameTime);
-                RecordDrawBreakdown(menuEventGroupId, timings, gameTime.TotalGameTime);
+                _frostedFrame.BeginCapture(destination.Width, destination.Height);
+                GraphicsDevice.Clear(new Color(16, 23, 47));
+                if (_stallDiagnostics is not null) timings.GraphicsClear = FrameStallDiagnostics.Complete(timingStart);
+                DrawGameplayScene(ref timings);
+                _frostedFrame.EndCapture();
             }
-            _stallDiagnostics?.ObserveCallbackEnd("draw");
-            return;
+
+            timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+            if (_flow.Screen == GameScreen.Gameplay)
+                _frostedFrame.PresentSharp(destination);
+            else
+                _frostedFrame.PresentFrozen(destination);
+            if (_stallDiagnostics is not null)
+                timings.FramePresentation = FrameStallDiagnostics.Complete(timingStart);
+
+            if (_flow.Screen == GameScreen.Paused)
+            {
+                timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+                _menuPresentation?.Draw(_flow, gameTime.TotalGameTime.TotalSeconds, drawBackdrop: false);
+                if (_stallDiagnostics is not null) timings.MenuRender = FrameStallDiagnostics.Complete(timingStart);
+            }
         }
 
-        var environmentTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+        base.Draw(gameTime);
+        if (_stallDiagnostics is not null) timings.BaseDraw = FrameStallDiagnostics.Complete(timingStart);
+
+        if (_stallDiagnostics is not null)
+        {
+            var eventGroupId = _stallDiagnostics.RecordRootSection(
+                "draw", FrameStallDiagnostics.Complete(drawTimingStart), gameTime.TotalGameTime);
+            RecordDrawBreakdown(eventGroupId, timings, gameTime.TotalGameTime);
+        }
+        _stallDiagnostics?.ObserveCallbackEnd("draw");
+    }
+
+    private void DrawGameplayScene(ref DrawTimings timings)
+    {
+        var environmentTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
+        var timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
         if (_environmentPresentation is not null)
         {
             if (_stallDiagnostics is null) _environmentPresentation.DrawSky();
@@ -400,18 +446,6 @@ public sealed class BirdHellGame : Game
             if (_stallDiagnostics is not null)
                 timings.DebugOverlays = FrameStallDiagnostics.Complete(timingStart);
         }
-
-        timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
-        base.Draw(gameTime);
-        if (_stallDiagnostics is not null) timings.BaseDraw = FrameStallDiagnostics.Complete(timingStart);
-
-        if (_stallDiagnostics is not null)
-        {
-            var eventGroupId = _stallDiagnostics.RecordRootSection(
-                "draw", FrameStallDiagnostics.Complete(drawTimingStart), gameTime.TotalGameTime);
-            RecordDrawBreakdown(eventGroupId, timings, gameTime.TotalGameTime);
-        }
-        _stallDiagnostics?.ObserveCallbackEnd("draw");
     }
 
     protected override void UnloadContent()
@@ -421,6 +455,7 @@ public sealed class BirdHellGame : Game
         _environmentPresentation?.Dispose();
         _spritePresentation?.Dispose();
         _menuPresentation?.Dispose();
+        _frostedFrame?.Dispose();
         _audio?.Dispose();
         _effect?.Dispose();
     }
@@ -451,6 +486,8 @@ public sealed class BirdHellGame : Game
             "graphics_device_clear", "draw", eventGroupId, timings.GraphicsClear, gameTime);
         _stallDiagnostics.RecordNestedSection(
             "menu_render", "draw", eventGroupId, timings.MenuRender, gameTime);
+        _stallDiagnostics.RecordNestedSection(
+            "frame_target_present", "draw", eventGroupId, timings.FramePresentation, gameTime);
         if (_stallDiagnostics.RecordNestedSection(
                 "environment_render", "draw", eventGroupId, timings.Environment, gameTime))
         {
@@ -598,8 +635,40 @@ public sealed class BirdHellGame : Game
         if (result.ApplyDisplayMode) ApplyDisplayMode();
         if (result.EndGameplay) EndGameplay();
         if (result.StartGameplay) StartGameplay();
+        if (result.RestartGameplay) RestartCurrentCave();
+        if (result.StartNewCave) StartNewCave();
+        if (result.PauseGameplay) PauseGameplay();
+        if (result.ResumeGameplay) ResumeGameplay();
         if (result.ExitRequested) Exit();
         if (_flow.Screen != GameScreen.Gameplay) UpdateWindowTitle();
+    }
+
+    private void PauseGameplay()
+    {
+        _simulationAccumulator = 0d;
+        _gameplayInput.ClearBufferedEdges();
+        _audio?.PauseMusic();
+        UpdateWindowTitle();
+    }
+
+    private void ResumeGameplay()
+    {
+        _simulationAccumulator = 0d;
+        _gameplayInput.ClearBufferedEdges();
+        _audio?.ResumeMusic();
+        UpdateWindowTitle();
+    }
+
+    private void RestartCurrentCave()
+    {
+        _run?.RestartSameSeed();
+        CompleteHostReset();
+    }
+
+    private void StartNewCave()
+    {
+        _run?.StartNewRun();
+        CompleteHostReset();
     }
 
     private void StartGameplay()
@@ -629,6 +698,8 @@ public sealed class BirdHellGame : Game
         _triangleIndices = [];
         _outlineVertices = [];
         _gameplayInput.ClearBufferedEdges();
+        _frostedFrame?.Release();
+        _audio?.ResumeMusic();
         UpdateWindowTitle();
     }
 
@@ -654,6 +725,7 @@ public sealed class BirdHellGame : Game
             _graphics.PreferredBackBufferHeight = _windowedHeight;
         }
         _graphics.ApplyChanges();
+        _frostedFrame?.Release();
     }
 
     private void CompleteHostReset()
@@ -1244,6 +1316,7 @@ public sealed class BirdHellGame : Game
     {
         public StallSectionTiming GraphicsClear;
         public StallSectionTiming MenuRender;
+        public StallSectionTiming FramePresentation;
         public StallSectionTiming Environment;
         public StallSectionTiming Sky;
         public RenderBatchTimings SkyBatch;
@@ -1293,6 +1366,7 @@ public sealed class BirdHellGame : Game
             RunState.AllBirdsDead => " - ALL BIRDS DEAD",
             _ => " - PLAYING",
         };
+        if (_flow.Screen == GameScreen.Paused) state += " - PAUSED";
         var navigationDiagnostic = string.Empty;
         if (_debug.ShowNavigation)
         {
@@ -1315,6 +1389,6 @@ public sealed class BirdHellGame : Game
             }
         }
         Window.Title = $"Bird Hell [{_run.CaveProfileName}] - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/{_run.Enemies.Enemies.Count}{state}{navigationDiagnostic} - " +
-                       $"A/D or left stick move, SPACE/A jump, S/Down crouch, LMB/Ctrl/RT fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC menu - Seed: {_run.Seed}";
+                       $"A/D or left stick move, SPACE/A jump, S/Down crouch, LMB/Ctrl/RT fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC/Menu pause - Seed: {_run.Seed}";
     }
 }

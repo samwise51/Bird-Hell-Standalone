@@ -64,6 +64,19 @@ public sealed class GameplayAudio : IGameplayAudioSink, IDisposable
         if (MediaPlayer.State != MediaState.Playing) MediaPlayer.Play(_music);
     }
 
+    public void PauseMusic()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (MediaPlayer.State == MediaState.Playing) MediaPlayer.Pause();
+    }
+
+    public void ResumeMusic()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (MediaPlayer.State == MediaState.Paused) MediaPlayer.Resume();
+        else if (MediaPlayer.State != MediaState.Playing) StartMusic();
+    }
+
     public void PlayProjectileFired() => _projectileFired.Play();
     public void PlayPlayerHit() => _playerHit.Play();
     public void PlayPlayerDeath() => _playerDeath.Play();

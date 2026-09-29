@@ -1,13 +1,18 @@
 namespace BirdHell.Core;
 
-public enum GameScreen { MainMenu, Options, Gameplay }
+public enum GameScreen { MainMenu, Options, Gameplay, Paused }
 public enum MainMenuItem { Play, Options, Exit }
 public enum OptionsMenuItem { BirdCount, CaveProfile, Invincibility, DisplayMode, Back }
-public enum MenuAction { None, Previous, Next, Decrease, Increase, Activate, Back }
+public enum PauseMenuItem { Resume, Restart, NewCave, ReturnToMainMenu }
+public enum MenuAction { None, Previous, Next, Decrease, Increase, Activate, Back, Escape, TogglePause }
 
 public readonly record struct GameFlowResult(
     bool StartGameplay = false,
     bool EndGameplay = false,
+    bool PauseGameplay = false,
+    bool ResumeGameplay = false,
+    bool RestartGameplay = false,
+    bool StartNewCave = false,
     bool ApplyDisplayMode = false,
     bool ExitRequested = false);
 
@@ -20,9 +25,14 @@ public sealed class GameFlow
     public GameOptions Options { get; }
     public MainMenuItem FocusedMainMenuItem { get; private set; } = MainMenuItem.Play;
     public OptionsMenuItem FocusedOptionsMenuItem { get; private set; } = OptionsMenuItem.BirdCount;
-    public int FocusedIndex => Screen == GameScreen.Options
-        ? (int)FocusedOptionsMenuItem
-        : (int)FocusedMainMenuItem;
+    public PauseMenuItem FocusedPauseMenuItem { get; private set; } = PauseMenuItem.Resume;
+    public int FocusedIndex => Screen switch
+    {
+        GameScreen.Options => (int)FocusedOptionsMenuItem,
+        GameScreen.Paused => (int)FocusedPauseMenuItem,
+        _ => (int)FocusedMainMenuItem,
+    };
+    public bool GameplayCanAdvance => Screen == GameScreen.Gameplay;
     public bool ExitRequested { get; private set; }
 
     public GameFlowResult Handle(MenuAction action)
@@ -32,7 +42,8 @@ public sealed class GameFlow
         {
             GameScreen.MainMenu => HandleMainMenu(action),
             GameScreen.Options => HandleOptions(action),
-            GameScreen.Gameplay when action == MenuAction.Back => ReturnToMainMenu(true),
+            GameScreen.Gameplay when action is MenuAction.Escape or MenuAction.TogglePause => Pause(),
+            GameScreen.Paused => HandlePause(action),
             _ => default,
         };
     }
@@ -43,6 +54,8 @@ public sealed class GameFlow
             FocusedMainMenuItem = (MainMenuItem)Math.Clamp(index, 0, 2);
         else if (Screen == GameScreen.Options)
             FocusedOptionsMenuItem = (OptionsMenuItem)Math.Clamp(index, 0, 4);
+        else if (Screen == GameScreen.Paused)
+            FocusedPauseMenuItem = (PauseMenuItem)Math.Clamp(index, 0, 3);
     }
 
     private GameFlowResult HandleMainMenu(MenuAction action)
@@ -73,7 +86,7 @@ public sealed class GameFlow
 
     private GameFlowResult HandleOptions(MenuAction action)
     {
-        if (action == MenuAction.Back) return ReturnToMainMenu(false);
+        if (action is MenuAction.Back or MenuAction.Escape) return ReturnToMainMenu(false);
         if (action is MenuAction.Previous or MenuAction.Next)
         {
             FocusedOptionsMenuItem = (OptionsMenuItem)Wrap(
@@ -101,6 +114,43 @@ public sealed class GameFlow
                 return new GameFlowResult(ApplyDisplayMode: true);
         }
         return default;
+    }
+
+    private GameFlowResult HandlePause(MenuAction action)
+    {
+        if (action is MenuAction.Escape or MenuAction.TogglePause) return Resume();
+        if (action is MenuAction.Previous or MenuAction.Next)
+        {
+            FocusedPauseMenuItem = (PauseMenuItem)Wrap(
+                (int)FocusedPauseMenuItem + (action == MenuAction.Previous ? -1 : 1), 4);
+            return default;
+        }
+        if (action != MenuAction.Activate) return default;
+
+        return FocusedPauseMenuItem switch
+        {
+            PauseMenuItem.Resume => Resume(),
+            PauseMenuItem.Restart => Resume(restartGameplay: true),
+            PauseMenuItem.NewCave => Resume(startNewCave: true),
+            PauseMenuItem.ReturnToMainMenu => ReturnToMainMenu(true),
+            _ => throw new ArgumentOutOfRangeException(),
+        };
+    }
+
+    private GameFlowResult Pause()
+    {
+        Screen = GameScreen.Paused;
+        FocusedPauseMenuItem = PauseMenuItem.Resume;
+        return new GameFlowResult(PauseGameplay: true);
+    }
+
+    private GameFlowResult Resume(bool restartGameplay = false, bool startNewCave = false)
+    {
+        Screen = GameScreen.Gameplay;
+        return new GameFlowResult(
+            ResumeGameplay: true,
+            RestartGameplay: restartGameplay,
+            StartNewCave: startNewCave);
     }
 
     private GameFlowResult ReturnToMainMenu(bool endedGameplay)
