@@ -25,10 +25,10 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 
 ## Controls
 
-- `A` / `D` or Left / Right: move
-- `SPACE`: jump (the original controller allows one air jump)
+- `A` / `D`, Left / Right, or controller left stick: move
+- `SPACE` or controller A: jump (the original controller allows one air jump)
 - `S` or Down: crouch animation only (movement, physics, and collider are unchanged)
-- Left mouse button, Left Ctrl, or controller A: fire horizontally in the direction the player faces
+- Left mouse button, Left Ctrl, or controller right trigger: fire once per press/pull in the direction the player faces
 - `R`: start a fresh run with a new cave seed (the standalone production replacement for Unity's Start/`Escape` regeneration)
 - `F5`: debug extension that restarts the run with the exact current seed
 - `O`: toggle terrain outlines

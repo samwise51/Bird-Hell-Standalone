@@ -27,10 +27,8 @@ public sealed class BirdHellGame : Game
     private int[] _triangleIndices = [];
     private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
-    private MouseState _previousMouseState;
-    private GamePadState _previousGamePadState;
-    private bool _pendingJump;
-    private bool _pendingFire;
+    private readonly GameplayInputAdapter _gameplayInput = new();
+    private GamePadState[] _gamePadStates = [];
     private double _simulationAccumulator;
     private int _displayedHealth = -1;
     private int _displayedEnemyCount = -1;
@@ -67,9 +65,11 @@ public sealed class BirdHellGame : Game
         _flightRecorder = FlightRecorder.Start(_flightRecorderOptions, _run, SimulationStep);
         if (_flightRecorder is not null) _run.AttachFlightRecorder(_flightRecorder);
         CompleteHostReset();
-        _previousKeyboardState = Keyboard.GetState();
-        _previousMouseState = Mouse.GetState();
-        _previousGamePadState = GamePad.GetState(PlayerIndex.One);
+        _gamePadStates = new GamePadState[GamePad.MaximumGamePadCount];
+        var keyboardState = Keyboard.GetState();
+        SampleGamePads();
+        _gameplayInput.UpdateFrame(keyboardState, Mouse.GetState(), _gamePadStates);
+        _previousKeyboardState = keyboardState;
         base.Initialize();
     }
 
@@ -96,7 +96,8 @@ public sealed class BirdHellGame : Game
     {
         var keyboardState = Keyboard.GetState();
         var mouseState = Mouse.GetState();
-        var gamePadState = GamePad.GetState(PlayerIndex.One);
+        SampleGamePads();
+        _gameplayInput.UpdateFrame(keyboardState, mouseState, _gamePadStates);
         if (keyboardState.IsKeyDown(Keys.Escape)) Exit();
         var resetThisFrame = false;
         if (WasPressed(keyboardState, Keys.R))
@@ -136,25 +137,14 @@ public sealed class BirdHellGame : Game
 
         if (!resetThisFrame)
         {
-            _pendingJump |= WasPressed(keyboardState, Keys.Space);
-            _pendingFire |= WasPressed(keyboardState, Keys.LeftControl) ||
-                            mouseState.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released ||
-                            gamePadState.IsButtonDown(Buttons.A) && _previousGamePadState.IsButtonUp(Buttons.A);
-        }
-        if (!resetThisFrame)
-        {
             _simulationAccumulator += Math.Min(gameTime.ElapsedGameTime.TotalSeconds, MaximumFrameTime);
             while (_simulationAccumulator >= SimulationStep)
             {
-                Simulate(keyboardState);
-                _pendingJump = false;
-                _pendingFire = false;
+                Simulate(_gameplayInput.ConsumeSimulationStep());
                 _simulationAccumulator -= SimulationStep;
             }
         }
         _previousKeyboardState = keyboardState;
-        _previousMouseState = mouseState;
-        _previousGamePadState = gamePadState;
         base.Update(gameTime);
     }
 
@@ -205,8 +195,7 @@ public sealed class BirdHellGame : Game
     {
         if (_run is null) return;
         _simulationAccumulator = 0d;
-        _pendingJump = false;
-        _pendingFire = false;
+        _gameplayInput.ClearBufferedEdges();
         _atmosphere.OnGameplayReset();
         _environmentPresentation?.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
         var keyboard = Keyboard.GetState();
@@ -307,20 +296,16 @@ public sealed class BirdHellGame : Game
         return polygon;
     }
 
-    private void Simulate(KeyboardState keyboardState)
+    private void Simulate(GameplayInputState input)
     {
         if (_run is null) return;
-        var horizontal = 0f;
-        if (keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left)) horizontal -= 1f;
-        if (keyboardState.IsKeyDown(Keys.D) || keyboardState.IsKeyDown(Keys.Right)) horizontal += 1f;
         var shotsBefore = _run.WeaponState.ShotsFired;
         var stepResult = _run.Step(
-            new PlayerInput(horizontal, _pendingJump, keyboardState.IsKeyDown(Keys.Space)),
-            _pendingFire,
+            new PlayerInput(input.Horizontal, input.JumpPressed, input.JumpHeld),
+            input.FirePressed,
             SimulationStep);
-        var crouchHeld = keyboardState.IsKeyDown(Keys.S) || keyboardState.IsKeyDown(Keys.Down);
         _animations.Player.Update(
-            CreatePlayerVisualSnapshot(crouchHeld),
+            CreatePlayerVisualSnapshot(input.CrouchHeld),
             _run.WeaponState.ShotsFired > shotsBefore,
             stepResult.SecondJumpPerformed,
             SimulationStep);
@@ -332,6 +317,12 @@ public sealed class BirdHellGame : Game
             UpdateWindowTitle();
         else if (_debug.ShowNavigation && _navigationDiagnosticTitleTimer >= 0.25f)
             UpdateWindowTitle();
+    }
+
+    private void SampleGamePads()
+    {
+        for (var index = 0; index < _gamePadStates.Length; index++)
+            _gamePadStates[index] = GamePad.GetState(index, GamePadDeadZone.None);
     }
 
     private PlayerVisualSnapshot CreatePlayerVisualSnapshot(bool crouchHeld)
@@ -532,6 +523,6 @@ public sealed class BirdHellGame : Game
             }
         }
         Window.Title = $"Bird Hell [{_run.CaveProfileName}] - HP {_displayedHealth}/100 - Enemies {_displayedEnemyCount}/15{state}{navigationDiagnostic} - " +
-                       $"A/D move, SPACE jump, S/Down crouch, LMB/Ctrl/A fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC exit - Seed: {_run.Seed}";
+                       $"A/D or left stick move, SPACE/A jump, S/Down crouch, LMB/Ctrl/RT fire, R new, F5 same, O outlines, C collision, N navigation, V clouds ({(_atmosphere.IsVisible ? "on" : "off")}), ESC exit - Seed: {_run.Seed}";
     }
 }
