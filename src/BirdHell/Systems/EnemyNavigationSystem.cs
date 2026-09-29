@@ -4,6 +4,34 @@ using BirdHell.World;
 
 namespace BirdHell.Systems;
 
+public enum PathfindingFailureReason
+{
+    InvalidStartWorldPosition,
+    StartLacksRadiusClearance,
+    NoStartCell,
+    NoReachableDestinationCell,
+    ResolvedDestinationLacksRadiusClearance,
+    AStarFailedWithValidEndpoints,
+}
+
+public sealed record PathfindingAttemptDiagnostics(
+    Vector2 RequestedStartWorldPosition,
+    Vector2 RequestedTargetWorldPosition,
+    NavigationCell? StartCell,
+    NavigationCell? NearestTargetCell,
+    NavigationCell? ResolvedDestinationCell,
+    bool StartTraversable,
+    bool StartRadiusClear,
+    bool RequestedTargetTraversable,
+    bool RequestedTargetRadiusClear,
+    bool ResolvedDestinationWalkable,
+    bool ResolvedDestinationRadiusClear,
+    int StartComponentId,
+    int NearestTargetComponentId,
+    int ResolvedDestinationComponentId,
+    bool DirectTargetAppended,
+    PathfindingFailureReason? FailureReason);
+
 public sealed record EnemyNavigationDiagnostics(
     int EnemyId,
     Vector2 Position,
@@ -19,7 +47,8 @@ public sealed record EnemyNavigationDiagnostics(
     int NearbyEnemyCount,
     Vector2 IntendedMovement,
     Vector2 ActualMovement,
-    bool CollidedWithTerrainThisStep);
+    bool CollidedWithTerrainThisStep,
+    PathfindingAttemptDiagnostics? LastPathfindingAttempt);
 
 public sealed class EnemyNavigationSystem
 {
@@ -65,7 +94,9 @@ public sealed class EnemyNavigationSystem
             if (enemy.RepathTimer >= RepathInterval)
             {
                 enemy.RepathTimer %= RepathInterval;
-                var newPath = _pathfinder.FindPath(enemy.ColliderCenter, playerPosition);
+                var attempt = FindPath(enemy.ColliderCenter, playerPosition, enemy.ColliderRadius);
+                GetMotionState(enemy.Id).LastPathfindingAttempt = attempt.Diagnostics;
+                var newPath = attempt.Path;
                 if (newPath is { Count: > 0 })
                 {
                     enemy.Path = newPath;
@@ -141,8 +172,115 @@ public sealed class EnemyNavigationSystem
                 nearby,
                 state.IntendedMovement,
                 state.ActualMovement,
-                state.CollidedThisStep);
+                state.CollidedThisStep,
+                state.LastPathfindingAttempt);
         }).ToArray();
+    }
+
+    private PathfindingAttempt FindPath(Vector2 start, Vector2 target, float radius)
+    {
+        var grid = _pathfinder.Grid;
+        var startTraversable = grid.IsWorldPositionInTraversableSpace(start);
+        var startClear = startTraversable && !_terrain.IntersectsCircle(start, radius);
+        var targetTraversable = grid.IsWorldPositionInTraversableSpace(target);
+        var targetClear = targetTraversable && !_terrain.IntersectsCircle(target, radius);
+        var nearestTargetFound = grid.TryFindNearestWalkable(
+            target, AStarPathfinder.MaximumNearestNodeDistance, out var nearestTargetCell);
+        var nearestTargetComponent = nearestTargetFound
+            ? grid.GetComponentId(nearestTargetCell)
+            : NavigationGrid.NoComponent;
+
+        NavigationCell? startCell = null;
+        NavigationCell? resolvedCell = null;
+        var startComponent = NavigationGrid.NoComponent;
+        var resolvedComponent = NavigationGrid.NoComponent;
+        var resolvedWalkable = false;
+        var resolvedClear = false;
+        var directTargetAppended = false;
+        PathfindingFailureReason? failure = null;
+        IReadOnlyList<Vector2>? path = null;
+
+        if (!startTraversable) failure = PathfindingFailureReason.InvalidStartWorldPosition;
+        else if (!startClear) failure = PathfindingFailureReason.StartLacksRadiusClearance;
+        else if (!TryFindNearestRadiusClearCell(
+                     start, AStarPathfinder.MaximumNearestNodeDistance, null, radius, out var foundStartCell))
+            failure = PathfindingFailureReason.NoStartCell;
+        else
+        {
+            startCell = foundStartCell;
+            startComponent = grid.GetComponentId(foundStartCell);
+            if (!TryFindNearestRadiusClearCell(
+                    target, AStarPathfinder.MaximumNearestNodeDistance, startComponent, radius, out var foundDestination))
+                failure = PathfindingFailureReason.NoReachableDestinationCell;
+            else
+            {
+                resolvedCell = foundDestination;
+                resolvedComponent = grid.GetComponentId(foundDestination);
+                resolvedWalkable = grid.IsWalkable(foundDestination);
+                var resolvedWorld = grid.CellToWorld(foundDestination);
+                resolvedClear = !_terrain.IntersectsCircle(resolvedWorld, radius);
+                if (!resolvedClear) failure = PathfindingFailureReason.ResolvedDestinationLacksRadiusClearance;
+                else
+                {
+                    path = _pathfinder.FindPath(foundStartCell, foundDestination);
+                    if (path is null) failure = PathfindingFailureReason.AStarFailedWithValidEndpoints;
+                    else if (targetClear && HasClearRoute(resolvedWorld, target, radius) &&
+                             Vector2.DistanceSquared(path[^1], target) > 0.000001f)
+                    {
+                        path = path.Append(target).ToArray();
+                        directTargetAppended = true;
+                    }
+                }
+            }
+        }
+
+        var diagnostics = new PathfindingAttemptDiagnostics(
+            start,
+            target,
+            startCell,
+            nearestTargetFound ? nearestTargetCell : null,
+            resolvedCell,
+            startTraversable,
+            startClear,
+            targetTraversable,
+            targetClear,
+            resolvedWalkable,
+            resolvedClear,
+            startComponent,
+            nearestTargetComponent,
+            resolvedComponent,
+            directTargetAppended,
+            failure);
+        return new PathfindingAttempt(path, diagnostics);
+    }
+
+    private bool TryFindNearestRadiusClearCell(
+        Vector2 world,
+        float maximumDistance,
+        int? componentId,
+        float radius,
+        out NavigationCell result)
+    {
+        var grid = _pathfinder.Grid;
+        var maximumSquared = maximumDistance * maximumDistance;
+        var bestDistance = float.PositiveInfinity;
+        result = default;
+        var found = false;
+        for (var y = 0; y < grid.Height; y++)
+        for (var x = 0; x < grid.Width; x++)
+        {
+            var cell = new NavigationCell(x, y);
+            if (!grid.IsWalkable(cell) || componentId.HasValue && grid.GetComponentId(cell) != componentId.Value)
+                continue;
+            var cellWorld = grid.CellToWorld(cell);
+            var distance = Vector2.DistanceSquared(world, cellWorld);
+            if (distance > maximumSquared || distance >= bestDistance || _terrain.IntersectsCircle(cellWorld, radius))
+                continue;
+            bestDistance = distance;
+            result = cell;
+            found = true;
+        }
+        return found;
     }
 
     public void SeparateEnemies(IReadOnlyList<Enemy> enemies)
@@ -228,5 +366,10 @@ public sealed class EnemyNavigationSystem
         public Vector2 IntendedMovement { get; set; }
         public Vector2 ActualMovement { get; set; }
         public bool CollidedThisStep { get; set; }
+        public PathfindingAttemptDiagnostics? LastPathfindingAttempt { get; set; }
     }
+
+    private sealed record PathfindingAttempt(
+        IReadOnlyList<Vector2>? Path,
+        PathfindingAttemptDiagnostics Diagnostics);
 }

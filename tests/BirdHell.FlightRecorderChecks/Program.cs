@@ -1,7 +1,9 @@
 using System.Reflection;
+using System.Numerics;
 using System.Text.Json;
 using BirdHell.Core;
 using BirdHell.Diagnostics;
+using BirdHell.Entities;
 using BirdHell.Systems;
 using BirdHell.World;
 
@@ -81,6 +83,116 @@ try
         foreach (var document in eventDocuments) document.Dispose();
     }
     Pass("metadata, stable bird IDs, and event ordering");
+
+    var schemaRoot = Path.Combine(temporaryRoot, "schema-2-failures");
+    var schemaRun = new MainScreenRun("flight-recorder-schema-2");
+    var schemaRecorder = FlightRecorder.Start(new FlightRecorderOptions
+    {
+        Enabled = true,
+        OutputDirectory = schemaRoot,
+    }, schemaRun, step)!;
+    var writeBirdChanges = typeof(FlightRecorder).GetMethod(
+        "WriteBirdChangeEvents", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    var birdNine = new Enemy(9, Vector2.Zero, 5) { FailedRepathCount = 1 };
+    var birdNineAttempt = new PathfindingAttemptDiagnostics(
+        new Vector2(-11.5f, -7.5f),
+        new Vector2(-17.28f, -11.44f),
+        new NavigationCell(52, 28),
+        new NavigationCell(47, 24),
+        new NavigationCell(48, 25),
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        3,
+        8,
+        3,
+        false,
+        PathfindingFailureReason.AStarFailedWithValidEndpoints);
+    writeBirdChanges.Invoke(schemaRecorder,
+    [
+        birdNine,
+        Before(birdNine),
+        Sample(1, 0f, false) with { BirdId = birdNine.Id },
+        Diagnostic(birdNine, birdNineAttempt),
+    ]);
+    var birdFour = new Enemy(4, Vector2.One, 5) { FailedRepathCount = 1 };
+    var birdFourAttempt = birdNineAttempt with
+    {
+        RequestedStartWorldPosition = Vector2.One,
+        RequestedTargetWorldPosition = new Vector2(7f, 8f),
+        FailureReason = PathfindingFailureReason.ResolvedDestinationLacksRadiusClearance,
+    };
+    writeBirdChanges.Invoke(schemaRecorder,
+    [
+        birdFour,
+        Before(birdFour),
+        Sample(1, 0f, false) with { BirdId = birdFour.Id },
+        Diagnostic(birdFour, birdFourAttempt),
+    ]);
+    schemaRecorder.Dispose();
+
+    var schemaDocuments = File.ReadLines(Path.Combine(schemaRecorder.SessionDirectory, "events.jsonl"))
+        .Select(line => JsonDocument.Parse(line)).ToArray();
+    var failureDocuments = schemaDocuments
+        .Where(document => document.RootElement.GetProperty("kind").GetString() == "pathfinding_failure")
+        .ToArray();
+    try
+    {
+        Assert(failureDocuments.Length == 2 &&
+               failureDocuments.All(document => document.RootElement.GetProperty("schemaVersion").GetInt32() == 2),
+            "Schema-2 pathfinding failures were absent or carried the wrong schema version.");
+        var birdNineFailure = failureDocuments.Single(document =>
+            document.RootElement.GetProperty("data").GetProperty("birdId").GetInt32() == 9).RootElement;
+        var data = birdNineFailure.GetProperty("data");
+        Assert(data.GetProperty("attemptedStartWorldPosition").GetProperty("x").GetSingle() == -11.5f &&
+               data.GetProperty("attemptedStartCell").GetProperty("x").GetInt32() == 52 &&
+               data.GetProperty("requestedTargetWorldPosition").GetProperty("x").GetSingle() == -17.28f &&
+               data.GetProperty("nearestTargetCell").GetProperty("x").GetInt32() == 47 &&
+               data.GetProperty("resolvedDestinationCell").GetProperty("x").GetInt32() == 48,
+            "Schema-2 failure omitted attempted, requested, unconstrained, or resolved endpoint coordinates.");
+        Assert(data.GetProperty("startEndpoint").GetProperty("traversable").GetBoolean() &&
+               data.GetProperty("startEndpoint").GetProperty("radiusClear").GetBoolean() &&
+               data.GetProperty("startEndpoint").GetProperty("componentId").GetInt32() == 3 &&
+               !data.GetProperty("requestedTargetEndpoint").GetProperty("radiusClear").GetBoolean() &&
+               data.GetProperty("requestedTargetEndpoint").GetProperty("nearestCellComponentId").GetInt32() == 8 &&
+               data.GetProperty("resolvedDestinationEndpoint").GetProperty("walkable").GetBoolean() &&
+               data.GetProperty("resolvedDestinationEndpoint").GetProperty("radiusClear").GetBoolean() &&
+               data.GetProperty("resolvedDestinationEndpoint").GetProperty("componentId").GetInt32() == 3 &&
+               data.GetProperty("failureReason").GetString() == "astar_failed_with_valid_endpoints",
+            "Schema-2 failure omitted clearance, component, or explicit failure-reason details.");
+        var attribution = failureDocuments.ToDictionary(
+            document => document.RootElement.GetProperty("data").GetProperty("birdId").GetInt32(),
+            document => document.RootElement.GetProperty("data"));
+        Assert(attribution[4].GetProperty("requestedTargetWorldPosition").GetProperty("x").GetSingle() == 7f &&
+               attribution[4].GetProperty("failureReason").GetString() ==
+               "resolved_destination_lacks_radius_clearance" &&
+               attribution[9].GetProperty("requestedTargetWorldPosition").GetProperty("x").GetSingle() == -17.28f,
+            "Pathfinding diagnostics were attributed to the wrong bird.");
+    }
+    finally
+    {
+        foreach (var document in schemaDocuments) document.Dispose();
+    }
+    Pass("schema-2 pathfinding failures retain endpoint details, reasons, and per-bird attribution");
+
+    var schemaOne = Path.Combine(temporaryRoot, "schema-1");
+    Directory.CreateDirectory(schemaOne);
+    File.WriteAllText(Path.Combine(schemaOne, "metadata.json"),
+        "{\"schemaVersion\":1,\"fixedSimulationStepSeconds\":0.02}");
+    File.WriteAllText(Path.Combine(schemaOne, "events.jsonl"),
+        "{\"schemaVersion\":1,\"sequence\":1,\"tick\":1,\"kind\":\"pathfinding_failure\",\"data\":{\"birdId\":9}}\n");
+    File.WriteAllText(Path.Combine(schemaOne, "incidents.jsonl"), string.Empty);
+    File.WriteAllText(Path.Combine(schemaOne, "completion.json"),
+        "{\"schemaVersion\":1,\"completedNormally\":true}");
+    var schemaOneSummary = FlightRecordingAnalyzer.Analyze(schemaOne);
+    Assert(schemaOneSummary.CompletedNormally && schemaOneSummary.MalformedRecords == 0 &&
+           schemaOneSummary.Birds.Single().BirdId == 9 &&
+           schemaOneSummary.Birds.Single().PathfindingFailures == 1,
+        "The analyzer did not preserve schema-1 pathfinding-failure compatibility.");
+    Pass("schema-1 recordings remain analyzable");
 
     var incidentRoot = Path.Combine(temporaryRoot, "incidents");
     var incidentRun = new MainScreenRun("flight-recorder-incidents");
@@ -184,6 +296,13 @@ static BirdMovementSample Sample(long tick, float stall, bool collision) => new(
     new FlightVector(1f, 2f), new FlightVector(1.1f, 2.1f), default,
     new FlightVector(0.1f, 0f), default, new FlightVector(3f, 2f), new FlightVector(5f, 2f),
     4f, 0f, stall, 0, collision, collision ? (int)tick : 0, 0, 1, 4, 2, 0);
+
+static BirdBefore Before(Enemy enemy) => new(
+    FlightVector.From(enemy.ColliderCenter), enemy.Health, enemy.IsAlive, 0, 0, 0, 0, null);
+
+static EnemyNavigationDiagnostics Diagnostic(Enemy enemy, PathfindingAttemptDiagnostics attempt) => new(
+    enemy.Id, enemy.Position, enemy.Velocity, null, 0f, 6.9f, 0f, 0f, attempt.StartComponentId,
+    false, 0, 0, Vector2.Zero, Vector2.Zero, false, attempt);
 
 static string Fingerprint(MainScreenRun run)
 {

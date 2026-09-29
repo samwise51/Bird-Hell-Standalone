@@ -6,7 +6,7 @@ namespace BirdHell.Diagnostics;
 
 public sealed class FlightRecorder : IDisposable
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
     public const float StallTriggerSeconds = 0.5f;
     public const int RepeatedCollisionCount = 5;
     public const float RepeatedCollisionWindowSeconds = 1f;
@@ -182,7 +182,7 @@ public sealed class FlightRecorder : IDisposable
                 enemy.FailedRepathCount);
             samples.Add(sample);
             ProcessIncidentSample(sample);
-            WriteBirdChangeEvents(enemy, before.Birds[enemy.Id], sample);
+            WriteBirdChangeEvents(enemy, before.Birds[enemy.Id], sample, diagnostic);
         }
 
         WriteCombatEvents(run, before, firePressed);
@@ -203,12 +203,52 @@ public sealed class FlightRecorder : IDisposable
         })) _droppedMovementSamples += samples.Count;
     }
 
-    private void WriteBirdChangeEvents(Entities.Enemy enemy, BirdBefore before, BirdMovementSample sample)
+    private void WriteBirdChangeEvents(
+        Entities.Enemy enemy,
+        BirdBefore before,
+        BirdMovementSample sample,
+        EnemyNavigationDiagnostics diagnostic)
     {
         if (enemy.SuccessfulRepathCount != before.SuccessfulRepaths)
             WriteEvent("repath", new { birdId = enemy.Id, success = true, pathLength = enemy.Path.Count });
         if (enemy.FailedRepathCount != before.FailedRepaths)
-            WriteEvent("pathfinding_failure", new { birdId = enemy.Id });
+        {
+            var attempt = diagnostic.LastPathfindingAttempt;
+            WriteEvent("pathfinding_failure", new
+            {
+                birdId = enemy.Id,
+                attemptedStartWorldPosition = attempt is null
+                    ? null
+                    : (FlightVector?)FlightVector.From(attempt.RequestedStartWorldPosition),
+                attemptedStartCell = Cell(attempt?.StartCell),
+                requestedTargetWorldPosition = attempt is null
+                    ? null
+                    : (FlightVector?)FlightVector.From(attempt.RequestedTargetWorldPosition),
+                nearestTargetCell = Cell(attempt?.NearestTargetCell),
+                resolvedDestinationCell = Cell(attempt?.ResolvedDestinationCell),
+                startEndpoint = attempt is null ? null : new
+                {
+                    traversable = attempt.StartTraversable,
+                    radiusClear = attempt.StartRadiusClear,
+                    componentId = attempt.StartComponentId,
+                },
+                requestedTargetEndpoint = attempt is null ? null : new
+                {
+                    traversable = attempt.RequestedTargetTraversable,
+                    radiusClear = attempt.RequestedTargetRadiusClear,
+                    nearestCellComponentId = attempt.NearestTargetComponentId,
+                },
+                resolvedDestinationEndpoint = attempt is null ? null : new
+                {
+                    walkable = attempt.ResolvedDestinationWalkable,
+                    radiusClear = attempt.ResolvedDestinationRadiusClear,
+                    componentId = attempt.ResolvedDestinationComponentId,
+                },
+                failureReason = attempt?.FailureReason is { } reason
+                    ? FailureReason(reason)
+                    : "missing_attempt_diagnostics",
+            });
+        }
         if (enemy.PathIndex != before.PathIndex || sample.CurrentWaypoint != before.Waypoint)
             WriteEvent("waypoint_change", new
             {
@@ -327,6 +367,22 @@ public sealed class FlightRecorder : IDisposable
 
     private static FlightVector Difference(FlightVector end, FlightVector start) =>
         new(end.X - start.X, end.Y - start.Y);
+
+    private static object? Cell(BirdHell.World.NavigationCell? cell) => cell is { } value
+        ? new { value.X, value.Y }
+        : null;
+
+    private static string FailureReason(PathfindingFailureReason reason) => reason switch
+    {
+        PathfindingFailureReason.InvalidStartWorldPosition => "invalid_start_world_position",
+        PathfindingFailureReason.StartLacksRadiusClearance => "start_lacks_radius_clearance",
+        PathfindingFailureReason.NoStartCell => "no_start_cell",
+        PathfindingFailureReason.NoReachableDestinationCell => "no_reachable_destination_cell",
+        PathfindingFailureReason.ResolvedDestinationLacksRadiusClearance =>
+            "resolved_destination_lacks_radius_clearance",
+        PathfindingFailureReason.AStarFailedWithValidEndpoints => "astar_failed_with_valid_endpoints",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason)),
+    };
 
     public void Dispose()
     {

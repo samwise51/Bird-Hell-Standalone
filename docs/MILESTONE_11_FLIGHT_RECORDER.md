@@ -48,6 +48,8 @@ All numeric JSON is emitted by `System.Text.Json` using culture-independent JSON
 
 Coordinates are world units with `+X` right and `+Y` up; one generated cave tile is one world unit. Entity `position` is its render/gameplay origin and `colliderCenter` is explicitly named when used.
 
+Schema version 2 extends `pathfinding_failure` events with the attempted start world position/cell, requested target world position, unconstrained nearest target cell, component-constrained resolved destination cell, traversability and bird-radius-clearance flags for each endpoint, component IDs, and an explicit failure reason. This is additive to the version 1 movement and incident records; the analyzer continues to accept either version.
+
 A stall incident begins at 0.5 seconds of the existing distant/no-movement diagnostic. A repeated-collision incident begins at five terrain contacts in one second. One continuous symptom is suppressed until the bird has been healthy for one second, preventing duplicate incidents.
 
 ## Analyze a session

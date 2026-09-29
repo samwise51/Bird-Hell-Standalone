@@ -18,6 +18,11 @@ public sealed class AStarPathfinder
         if (!_grid.TryFindNearestWalkable(start, MaximumNearestNodeDistance, out var startCell) ||
             !_grid.TryFindNearestWalkable(end, MaximumNearestNodeDistance, out var endCell))
             return null;
+        return FindPath(startCell, endCell);
+    }
+
+    public IReadOnlyList<Vector2>? FindPath(NavigationCell startCell, NavigationCell endCell)
+    {
         if (!_grid.AreConnected(startCell, endCell)) return null;
 
         var count = _grid.CellCount;

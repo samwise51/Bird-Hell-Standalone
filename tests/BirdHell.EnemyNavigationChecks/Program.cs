@@ -221,6 +221,92 @@ for (var index = 0; index < 24; index++) navigation.Step([repathingEnemy], new V
 Assert(repathingEnemy.SuccessfulRepathCount == 2, "Enemy did not replan on the 0.5-second interval.");
 Pass("0.5-second repath interval");
 
+var endpointSegments = new[]
+{
+    new TerrainSegment(new Vector2(0f, -5f), new Vector2(0f, 5f)),
+    new TerrainSegment(new Vector2(0.1f, -0.25f), new Vector2(5f, -0.25f)),
+};
+var endpointGrid = Grid(endpointSegments, 13, 11, 0.15f);
+var endpointTerrain = new TerrainCollisionSystem(endpointSegments);
+var endpointNavigation = new EnemyNavigationSystem(new AStarPathfinder(endpointGrid), endpointTerrain);
+var endpointEnemy = AtCenter(9, new Vector2(-3f, 1f), 5);
+endpointEnemy.Path = [new Vector2(-3f, 1f)];
+endpointEnemy.PathIndex = endpointEnemy.Path.Count;
+var groundedTarget = new Vector2(2f, 0.15f);
+Assert(new AStarPathfinder(endpointGrid).FindPath(endpointEnemy.ColliderCenter, groundedTarget) is null,
+    "The regression fixture no longer reproduces the legacy raw-endpoint A* failure.");
+endpointNavigation.Step([endpointEnemy], groundedTarget, step);
+var endpointAttempt = endpointNavigation.GetDiagnostics([endpointEnemy], groundedTarget)
+    .Single().LastPathfindingAttempt!;
+Assert(endpointAttempt.NearestTargetCell == new NavigationCell(8, 5) &&
+       endpointAttempt.NearestTargetComponentId != endpointAttempt.StartComponentId &&
+       endpointTerrain.IntersectsCircle(
+           endpointGrid.CellToWorld(endpointAttempt.NearestTargetCell.Value), endpointEnemy.ColliderRadius),
+    "The grounded-target regression no longer presents an unconstrained endpoint in the wrong component.");
+Assert(!endpointAttempt.RequestedTargetRadiusClear &&
+       endpointAttempt.ResolvedDestinationCell is { } replacement &&
+       endpointAttempt.ResolvedDestinationWalkable && endpointAttempt.ResolvedDestinationRadiusClear &&
+       endpointAttempt.ResolvedDestinationComponentId == endpointAttempt.StartComponentId &&
+       endpointGrid.GetComponentId(replacement) == endpointAttempt.StartComponentId,
+    "Navigation did not replace the unsuitable grounded-player endpoint with a radius-clear cell in the bird component.");
+Assert(endpointAttempt.FailureReason is null && !endpointAttempt.DirectTargetAppended &&
+       endpointEnemy.SuccessfulRepathCount == 1 && endpointEnemy.FailedRepathCount == 0 &&
+       endpointEnemy.PathIndex < endpointEnemy.Path.Count && endpointEnemy.Path[^1] != groundedTarget,
+    "An exhausted stale route was not replaced, or the blocked exact player position was appended.");
+Pass("exhausted Bird 9-style route resolves a grounded target to a radius-clear endpoint in its own component");
+
+var exactTarget = new Vector2(3.25f, 0.2f);
+var exactEnemy = AtCenter(10, new Vector2(-3.25f, 0.2f), 5);
+var exactNavigation = new EnemyNavigationSystem(new AStarPathfinder(movementGrid), emptyTerrain);
+exactNavigation.Step([exactEnemy], exactTarget, step);
+var exactAttempt = exactNavigation.GetDiagnostics([exactEnemy], exactTarget).Single().LastPathfindingAttempt!;
+Assert(exactAttempt.DirectTargetAppended && exactEnemy.Path[^1] == exactTarget,
+    "A collision-clear final segment did not append the exact player position.");
+for (var index = 0; index < 250; index++) exactNavigation.Step([exactEnemy], exactTarget, step);
+Assert(Vector2.Distance(exactEnemy.ColliderCenter, exactTarget) <= EnemyNavigationSystem.EndReachedDistance + 0.01f,
+    "A bird did not approach the player closely after direct movement became valid.");
+Pass("exact-player append requires a clear final segment and preserves close approach");
+
+var invalidStartEnemy = AtCenter(20, exterior, 5);
+var invalidStartNavigation = new EnemyNavigationSystem(authoredFinder, authoredCollision);
+invalidStartNavigation.Step([invalidStartEnemy], leftInterior, step);
+Assert(Failure(invalidStartNavigation, invalidStartEnemy, leftInterior) ==
+       PathfindingFailureReason.InvalidStartWorldPosition,
+    "An exterior start was not diagnosed as an invalid start world position.");
+
+var unclearedStartEnemy = AtCenter(21, new Vector2(2f, 0.15f), 5);
+endpointNavigation.Step([unclearedStartEnemy], new Vector2(3f, 1f), step);
+Assert(Failure(endpointNavigation, unclearedStartEnemy, new Vector2(3f, 1f)) ==
+       PathfindingFailureReason.StartLacksRadiusClearance,
+    "A traversable start intersecting terrain was not diagnosed as lacking radius clearance.");
+
+var noStartSegment = new TerrainSegment(new Vector2(-1f, 0.6f), new Vector2(1f, 0.6f));
+var noStartGrid = new NavigationGrid([noStartSegment], 1, 1, 1f, Vector2.Zero, 0.7f);
+var noStartEnemy = AtCenter(22, Vector2.Zero, 5);
+var noStartNavigation = new EnemyNavigationSystem(
+    new AStarPathfinder(noStartGrid), new TerrainCollisionSystem([noStartSegment]));
+noStartNavigation.Step([noStartEnemy], Vector2.Zero, step);
+Assert(Failure(noStartNavigation, noStartEnemy, Vector2.Zero) == PathfindingFailureReason.NoStartCell,
+    "A clear start without any radius-clear navigation cell was not diagnosed distinctly.");
+
+var distantDivider = new TerrainSegment(new Vector2(0f, -2f), new Vector2(0f, 2f));
+var distantGrid = new NavigationGrid([distantDivider], 205, 3, 1f, Vector2.Zero, 0.15f);
+var distantTerrain = new TerrainCollisionSystem([distantDivider]);
+var distantNavigation = new EnemyNavigationSystem(new AStarPathfinder(distantGrid), distantTerrain);
+var distantEnemy = AtCenter(23, new Vector2(-101f, 0f), 5);
+var distantTarget = new Vector2(102f, 0f);
+distantNavigation.Step([distantEnemy], distantTarget, step);
+Assert(Failure(distantNavigation, distantEnemy, distantTarget) ==
+       PathfindingFailureReason.NoReachableDestinationCell,
+    "A target with no endpoint in the start component inside the projection bound was not diagnosed distinctly.");
+
+Assert(Enum.GetValues<PathfindingFailureReason>().Distinct().Count() == 6 &&
+       endpointAttempt.ResolvedDestinationCell is { } validDestination &&
+       endpointAttempt.StartCell is { } validStart &&
+       new AStarPathfinder(endpointGrid).FindPath(validStart, validDestination) is { Count: > 0 },
+    "Endpoint failure reasons overlap, or A* failed despite valid connected endpoints.");
+Pass("endpoint diagnostics distinguish invalid, uncleared, missing-start, unreachable-target, and valid-A* outcomes");
+
 var wallTerrain = new TerrainCollisionSystem([new TerrainSegment(new Vector2(0f, -5f), new Vector2(0f, 5f))]);
 var blockedNavigation = new EnemyNavigationSystem(new AStarPathfinder(dividedGrid), wallTerrain);
 var wallEnemy = AtCenter(0, new Vector2(-1f, 0f), 9);
@@ -645,6 +731,11 @@ static NavigationGrid Grid(IEnumerable<TerrainSegment> segments, int width = 7, 
     new(segments, width, height, 1f, Vector2.Zero, scanRadius);
 
 static Enemy AtCenter(int id, Vector2 center, int speed) => new(id, center - Enemy.OriginalColliderOffset, speed);
+
+static PathfindingFailureReason? Failure(
+    EnemyNavigationSystem navigation,
+    Enemy enemy,
+    Vector2 target) => navigation.GetDiagnostics([enemy], target).Single().LastPathfindingAttempt?.FailureReason;
 
 static IEnumerable<(Enemy First, Enemy Second)> AllPairs(IReadOnlyList<Enemy> enemies)
 {
