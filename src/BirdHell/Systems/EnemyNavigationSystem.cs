@@ -259,28 +259,133 @@ public sealed class EnemyNavigationSystem
         float maximumDistance,
         int? componentId,
         float radius,
-        out NavigationCell result)
+        out NavigationCell result) =>
+        TryFindNearestRadiusClearCellCore(
+            world, maximumDistance, componentId, radius, out result, out _);
+
+    // Kept separate from the production signature so endpoint-search operation counts remain
+    // testable without coupling normal pathfinding or stall profiling to measurement state.
+    private bool TryFindNearestRadiusClearCellForTesting(
+        Vector2 world,
+        float maximumDistance,
+        int? componentId,
+        float radius,
+        out NavigationCell result,
+        out int examinedCells) =>
+        TryFindNearestRadiusClearCellCore(
+            world, maximumDistance, componentId, radius, out result, out examinedCells);
+
+    private bool TryFindNearestRadiusClearCellCore(
+        Vector2 world,
+        float maximumDistance,
+        int? componentId,
+        float radius,
+        out NavigationCell result,
+        out int examinedCells)
     {
         var grid = _pathfinder.Grid;
         var maximumSquared = maximumDistance * maximumDistance;
         var bestDistance = float.PositiveInfinity;
-        result = default;
+        var bestIndex = int.MaxValue;
+        var selectedCell = default(NavigationCell);
+        var examined = 0;
         var found = false;
-        for (var y = 0; y < grid.Height; y++)
-        for (var x = 0; x < grid.Width; x++)
+
+        var origin = grid.WorldToCell(world);
+        var originWorld = grid.CellToWorld(origin);
+        var nearestXDistance = world.X - originWorld.X;
+        var nearestYDistance = world.Y - originWorld.Y;
+        var nearestXSquared = nearestXDistance * nearestXDistance;
+        var nearestYSquared = nearestYDistance * nearestYDistance;
+        var maximumRing = Math.Max(
+            Math.Max(origin.X, grid.Width - 1 - origin.X),
+            Math.Max(origin.Y, grid.Height - 1 - origin.Y));
+
+        for (var ring = 0; ring <= maximumRing; ring++)
         {
-            var cell = new NavigationCell(x, y);
-            if (!grid.IsWalkable(cell) || componentId.HasValue && grid.GetComponentId(cell) != componentId.Value)
-                continue;
+            var minimumX = Math.Max(0, origin.X - ring);
+            var maximumX = Math.Min(grid.Width - 1, origin.X + ring);
+            var minimumY = Math.Max(0, origin.Y - ring);
+            var maximumY = Math.Min(grid.Height - 1, origin.Y + ring);
+
+            var bottomY = origin.Y - ring;
+            var topY = origin.Y + ring;
+            if (bottomY >= 0)
+                for (var x = minimumX; x <= maximumX; x++)
+                    Consider(new NavigationCell(x, bottomY));
+            if (topY < grid.Height && topY != bottomY)
+                for (var x = minimumX; x <= maximumX; x++)
+                    Consider(new NavigationCell(x, topY));
+
+            var leftX = origin.X - ring;
+            var rightX = origin.X + ring;
+            var firstInteriorY = Math.Max(0, origin.Y - ring + 1);
+            var lastInteriorY = Math.Min(grid.Height - 1, origin.Y + ring - 1);
+            if (leftX >= 0)
+            {
+                for (var y = firstInteriorY; y <= lastInteriorY; y++)
+                    Consider(new NavigationCell(leftX, y));
+            }
+            if (rightX < grid.Width && rightX != leftX)
+            {
+                for (var y = firstInteriorY; y <= lastInteriorY; y++)
+                    Consider(new NavigationCell(rightX, y));
+            }
+
+            var nearestUnvisitedDistance = float.PositiveInfinity;
+            if (minimumX > 0)
+                nearestUnvisitedDistance = MathF.Min(
+                    nearestUnvisitedDistance,
+                    AxisDistanceSquared(minimumX - 1, true) + nearestYSquared);
+            if (maximumX < grid.Width - 1)
+                nearestUnvisitedDistance = MathF.Min(
+                    nearestUnvisitedDistance,
+                    AxisDistanceSquared(maximumX + 1, true) + nearestYSquared);
+            if (minimumY > 0)
+                nearestUnvisitedDistance = MathF.Min(
+                    nearestUnvisitedDistance,
+                    AxisDistanceSquared(minimumY - 1, false) + nearestXSquared);
+            if (maximumY < grid.Height - 1)
+                nearestUnvisitedDistance = MathF.Min(
+                    nearestUnvisitedDistance,
+                    AxisDistanceSquared(maximumY + 1, false) + nearestXSquared);
+
+            // Strict comparison preserves row-major tie-breaking by continuing through every
+            // unvisited cell that could be exactly as close as the current best cell.
+            if (found && bestDistance < nearestUnvisitedDistance) break;
+            if (nearestUnvisitedDistance > maximumSquared) break;
+        }
+        result = selectedCell;
+        examinedCells = examined;
+        return found;
+
+        void Consider(NavigationCell cell)
+        {
+            examined++;
             var cellWorld = grid.CellToWorld(cell);
             var distance = Vector2.DistanceSquared(world, cellWorld);
-            if (distance > maximumSquared || distance >= bestDistance || _terrain.IntersectsCircle(cellWorld, radius))
-                continue;
+            if (distance > maximumSquared ||
+                !grid.IsWalkable(cell) ||
+                componentId.HasValue && grid.GetComponentId(cell) != componentId.Value ||
+                _terrain.IntersectsCircle(cellWorld, radius))
+                return;
+
+            var index = cell.ToIndex(grid.Width);
+            if (distance > bestDistance || distance == bestDistance && index >= bestIndex) return;
             bestDistance = distance;
-            result = cell;
+            bestIndex = index;
+            selectedCell = cell;
             found = true;
         }
-        return found;
+
+        float AxisDistanceSquared(int index, bool horizontal)
+        {
+            var coordinate = horizontal
+                ? grid.Minimum.X + (index + 0.5f) * grid.NodeSize
+                : grid.Minimum.Y + (index + 0.5f) * grid.NodeSize;
+            var delta = (horizontal ? world.X : world.Y) - coordinate;
+            return delta * delta;
+        }
     }
 
     public void SeparateEnemies(IReadOnlyList<Enemy> enemies)

@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Reflection;
 using BirdHell.Core;
 using BirdHell.Entities;
 using BirdHell.Systems;
@@ -228,11 +229,54 @@ var endpointSegments = new[]
 };
 var endpointGrid = Grid(endpointSegments, 13, 11, 0.15f);
 var endpointTerrain = new TerrainCollisionSystem(endpointSegments);
+var generatedLookupEvidence = VerifyRadiusLookupEquivalence(generatedGrid, generatedTerrain, "generated cave");
+var endpointLookupEvidence = VerifyRadiusLookupEquivalence(endpointGrid, endpointTerrain, "Bird 9 endpoint grid");
+var oldExaminedCells = generatedLookupEvidence.OldExamined + endpointLookupEvidence.OldExamined;
+var optimizedExaminedCells = generatedLookupEvidence.OptimizedExamined + endpointLookupEvidence.OptimizedExamined;
+Assert(optimizedExaminedCells * 4 < oldExaminedCells,
+    $"Nearest-first radius lookup did not substantially reduce examined cells ({optimizedExaminedCells} vs {oldExaminedCells}).");
+Pass($"radius-clear nearest-first lookup matches row-major endpoints and examined " +
+     $"{optimizedExaminedCells:N0} vs {oldExaminedCells:N0} cells");
+
+var tieGrid = new NavigationGrid([], 4, 4, 1f, Vector2.Zero, 0f);
+var tieTerrain = new TerrainCollisionSystem([]);
+var tieNavigation = new EnemyNavigationSystem(new AStarPathfinder(tieGrid), tieTerrain);
+var tieResult = InvokeRadiusLookup(tieNavigation, Vector2.Zero, 10f, null, Enemy.OriginalColliderRadius);
+Assert(tieResult.Found && tieResult.Cell == new NavigationCell(1, 1),
+    "Nearest-first radius lookup did not preserve row-major selection for an exact four-cell tie.");
+Pass("radius-clear lookup preserves deterministic row-major tie-breaking");
+
 var endpointNavigation = new EnemyNavigationSystem(new AStarPathfinder(endpointGrid), endpointTerrain);
 var endpointEnemy = AtCenter(9, new Vector2(-3f, 1f), 5);
 endpointEnemy.Path = [new Vector2(-3f, 1f)];
 endpointEnemy.PathIndex = endpointEnemy.Path.Count;
 var groundedTarget = new Vector2(2f, 0.15f);
+var endpointStart = ReferenceRadiusLookup(
+    endpointGrid,
+    endpointTerrain,
+    endpointEnemy.ColliderCenter,
+    AStarPathfinder.MaximumNearestNodeDistance,
+    null,
+    endpointEnemy.ColliderRadius);
+Assert(endpointStart.Found, "Bird 9 regression start no longer has a radius-clear endpoint.");
+var endpointStartComponent = endpointGrid.GetComponentId(endpointStart.Cell);
+var constrainedReference = ReferenceRadiusLookup(
+    endpointGrid,
+    endpointTerrain,
+    groundedTarget,
+    AStarPathfinder.MaximumNearestNodeDistance,
+    endpointStartComponent,
+    endpointEnemy.ColliderRadius);
+var constrainedOptimized = InvokeRadiusLookup(
+    endpointNavigation,
+    groundedTarget,
+    AStarPathfinder.MaximumNearestNodeDistance,
+    endpointStartComponent,
+    endpointEnemy.ColliderRadius);
+Assert(constrainedOptimized.Found == constrainedReference.Found &&
+       constrainedOptimized.Cell == constrainedReference.Cell &&
+       endpointGrid.GetComponentId(constrainedOptimized.Cell) == endpointStartComponent,
+    "Optimized Bird 9 destination lookup changed the component-constrained endpoint.");
 Assert(new AStarPathfinder(endpointGrid).FindPath(endpointEnemy.ColliderCenter, groundedTarget) is null,
     "The regression fixture no longer reproduces the legacy raw-endpoint A* failure.");
 endpointNavigation.Step([endpointEnemy], groundedTarget, step);
@@ -750,6 +794,95 @@ static bool EnemyIntersectsPlayer(Enemy enemy, Player player, float margin)
     var core = new TerrainSegment(player.ColliderCenter - coreOffset, player.ColliderCenter + coreOffset);
     var required = enemy.ColliderRadius + player.Collider.Radius + margin;
     return TerrainCollisionSystem.DistanceSquaredToSegment(enemy.ColliderCenter, core) < required * required;
+}
+
+static (int OptimizedExamined, int OldExamined) VerifyRadiusLookupEquivalence(
+    NavigationGrid grid,
+    TerrainCollisionSystem terrain,
+    string fixture)
+{
+    var navigation = new EnemyNavigationSystem(new AStarPathfinder(grid), terrain);
+    var candidates = new List<(Vector2 World, int? Component)>();
+    for (var y = 0; y < grid.Height && candidates.Count < 20; y += 3)
+    for (var x = 0; x < grid.Width && candidates.Count < 20; x += 5)
+    {
+        var cell = new NavigationCell(x, y);
+        if (!grid.IsWalkable(cell)) continue;
+        var world = grid.CellToWorld(cell) + new Vector2((x % 3 - 1) * 0.19f, (y % 3 - 1) * 0.17f);
+        candidates.Add((world, null));
+        candidates.Add((world, grid.GetComponentId(cell)));
+    }
+    Assert(candidates.Count > 0, $"{fixture} provided no representative radius-lookup queries.");
+
+    var optimizedExamined = 0;
+    var oldExamined = 0;
+    foreach (var query in candidates)
+    {
+        var optimized = InvokeRadiusLookup(
+            navigation, query.World, AStarPathfinder.MaximumNearestNodeDistance,
+            query.Component, Enemy.OriginalColliderRadius);
+        var reference = ReferenceRadiusLookup(
+            grid, terrain, query.World, AStarPathfinder.MaximumNearestNodeDistance,
+            query.Component, Enemy.OriginalColliderRadius);
+        Assert(optimized.Found == reference.Found && (!optimized.Found || optimized.Cell == reference.Cell),
+            $"{fixture} changed endpoint selection for {query.World} in component {query.Component?.ToString() ?? "any"}: " +
+            $"optimized={optimized.Found}/{optimized.Cell}, reference={reference.Found}/{reference.Cell}.");
+        if (optimized.Found)
+        {
+            Assert(grid.IsWalkable(optimized.Cell) &&
+                   (!query.Component.HasValue || grid.GetComponentId(optimized.Cell) == query.Component.Value) &&
+                   !terrain.IntersectsCircle(grid.CellToWorld(optimized.Cell), Enemy.OriginalColliderRadius),
+                $"{fixture} selected an endpoint without walkability, component, or collider-radius clearance.");
+        }
+        optimizedExamined += optimized.Examined;
+        oldExamined += reference.Examined;
+    }
+    return (optimizedExamined, oldExamined);
+}
+
+static (bool Found, NavigationCell Cell, int Examined) InvokeRadiusLookup(
+    EnemyNavigationSystem navigation,
+    Vector2 world,
+    float maximumDistance,
+    int? componentId,
+    float radius)
+{
+    var method = typeof(EnemyNavigationSystem).GetMethod(
+        "TryFindNearestRadiusClearCellForTesting", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    object?[] arguments = [world, maximumDistance, componentId, radius, default(NavigationCell), 0];
+    var found = (bool)method.Invoke(navigation, arguments)!;
+    return (found, (NavigationCell)arguments[4]!, (int)arguments[5]!);
+}
+
+static (bool Found, NavigationCell Cell, int Examined) ReferenceRadiusLookup(
+    NavigationGrid grid,
+    TerrainCollisionSystem terrain,
+    Vector2 world,
+    float maximumDistance,
+    int? componentId,
+    float radius)
+{
+    var maximumSquared = maximumDistance * maximumDistance;
+    var bestDistance = float.PositiveInfinity;
+    var result = default(NavigationCell);
+    var found = false;
+    var examined = 0;
+    for (var y = 0; y < grid.Height; y++)
+    for (var x = 0; x < grid.Width; x++)
+    {
+        examined++;
+        var cell = new NavigationCell(x, y);
+        if (!grid.IsWalkable(cell) || componentId.HasValue && grid.GetComponentId(cell) != componentId.Value)
+            continue;
+        var cellWorld = grid.CellToWorld(cell);
+        var distance = Vector2.DistanceSquared(world, cellWorld);
+        if (distance > maximumSquared || distance >= bestDistance || terrain.IntersectsCircle(cellWorld, radius))
+            continue;
+        bestDistance = distance;
+        result = cell;
+        found = true;
+    }
+    return (found, result, examined);
 }
 
 static (TerrainOccupancy Occupancy, TerrainCollisionSystem Collision, NavigationGrid Navigation,
