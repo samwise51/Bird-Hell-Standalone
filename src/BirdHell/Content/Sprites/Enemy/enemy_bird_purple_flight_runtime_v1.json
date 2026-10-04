@@ -1,0 +1,183 @@
+{
+  "texture": "enemy_bird_purple_flight_runtime_v1.png",
+  "cellWidth": 128,
+  "cellHeight": 120,
+  "nativeFacing": "right",
+  "filtering": "linear",
+  "pivot": {
+    "x": 80,
+    "y": 72,
+    "space": "cellPixels",
+    "semantic": "torso/body (derived from a fixed offset from the beak/head landmark)"
+  },
+  "atlas": {
+    "width": 512,
+    "height": 480,
+    "columns": 4,
+    "rows": 4
+  },
+  "source": {
+    "path": "art/Source/Enemy/purple_raven_flight_sprite_sheet.png",
+    "sha256": "4644ff36413f2da0263dc43e182cefc060bbab3a893c0d1c85f83e9988d7b0e8",
+    "state": "approved 16-frame purple bird flight cycle, row-major source order"
+  },
+  "normalization": {
+    "sourceScale": 0.32,
+    "alphaCoreThreshold": 128,
+    "fringeRadiusPixels": 3,
+    "collisionNote": "Visible wings are presentation-only; do not derive gameplay collision from frame bounds.",
+    "target720pHeightPixels": "approximately 80-95 at maximum/high-wing extension"
+  },
+  "animations": {
+    "Flight": {
+      "frames": [
+        {
+          "sourceOrderIndex": 0,
+          "rectangle": {
+            "x": 0,
+            "y": 0,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 1,
+          "rectangle": {
+            "x": 128,
+            "y": 0,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 2,
+          "rectangle": {
+            "x": 256,
+            "y": 0,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 3,
+          "rectangle": {
+            "x": 384,
+            "y": 0,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 4,
+          "rectangle": {
+            "x": 0,
+            "y": 120,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 5,
+          "rectangle": {
+            "x": 128,
+            "y": 120,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 6,
+          "rectangle": {
+            "x": 256,
+            "y": 120,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 7,
+          "rectangle": {
+            "x": 384,
+            "y": 120,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 8,
+          "rectangle": {
+            "x": 0,
+            "y": 240,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 9,
+          "rectangle": {
+            "x": 128,
+            "y": 240,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 10,
+          "rectangle": {
+            "x": 256,
+            "y": 240,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 11,
+          "rectangle": {
+            "x": 384,
+            "y": 240,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 12,
+          "rectangle": {
+            "x": 0,
+            "y": 360,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 13,
+          "rectangle": {
+            "x": 128,
+            "y": 360,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 14,
+          "rectangle": {
+            "x": 256,
+            "y": 360,
+            "width": 128,
+            "height": 120
+          }
+        },
+        {
+          "sourceOrderIndex": 15,
+          "rectangle": {
+            "x": 384,
+            "y": 360,
+            "width": 128,
+            "height": 120
+          }
+        }
+      ],
+      "fps": 12,
+      "loop": true
+    }
+  }
+}
