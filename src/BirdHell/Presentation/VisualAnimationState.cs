@@ -5,6 +5,7 @@ public enum PlayerVisualState
     Idle,
     Run,
     Jump,
+    Airborne,
     Roll,
     Crouch,
     Attack,
@@ -74,6 +75,8 @@ public sealed class PlayerAnimationState
         }
         if (desired is not PlayerVisualState.Attack and not PlayerVisualState.Roll)
             _locomotionPlayback.Advance(deltaTime);
+        if (desired == PlayerVisualState.Jump && _locomotionPlayback.IsFinished)
+            SetState(SelectState(player));
         if (desired == PlayerVisualState.Attack && !_attackPlaying ||
             desired == PlayerVisualState.Roll && !_rollPlaying)
             SetState(SelectState(player));
@@ -91,14 +94,21 @@ public sealed class PlayerAnimationState
         Update(player, false, false, 0f);
     }
 
-    public static SpriteFlip FlipForFacing(int facingDirection) => facingDirection < 0 ? SpriteFlip.Horizontal : SpriteFlip.None;
+    public static SpriteFlip FlipForFacing(int facingDirection)
+    {
+        var desired = facingDirection < 0 ? HorizontalFacing.Left : HorizontalFacing.Right;
+        return desired == BirdHellVisuals.PlayerNativeFacing ? SpriteFlip.None : SpriteFlip.Horizontal;
+    }
 
     private PlayerVisualState SelectState(PlayerVisualSnapshot player) => _attackPlaying
         ? PlayerVisualState.Attack
         : _rollPlaying
             ? PlayerVisualState.Roll
             : !player.IsGrounded
-                ? PlayerVisualState.Jump
+                ? _locomotionPlayback.Clip == BirdHellVisuals.PlayerAirborne ||
+                  _locomotionPlayback.Clip == BirdHellVisuals.PlayerJump && _locomotionPlayback.IsFinished
+                    ? PlayerVisualState.Airborne
+                    : PlayerVisualState.Jump
                 : player.CrouchHeld
                     ? PlayerVisualState.Crouch
                     : MathF.Abs(player.HorizontalSpeed) > 0.01f
@@ -123,6 +133,7 @@ public sealed class PlayerAnimationState
             PlayerVisualState.Idle => BirdHellVisuals.PlayerIdle,
             PlayerVisualState.Run => BirdHellVisuals.PlayerRun,
             PlayerVisualState.Jump => BirdHellVisuals.PlayerJump,
+            PlayerVisualState.Airborne => BirdHellVisuals.PlayerAirborne,
             PlayerVisualState.Crouch => BirdHellVisuals.PlayerCrouch,
             _ => throw new ArgumentOutOfRangeException(nameof(state)),
         };

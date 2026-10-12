@@ -16,7 +16,7 @@ public sealed class SpritePresentation : IDisposable
         _graphicsDevice = graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice));
         ArgumentException.ThrowIfNullOrWhiteSpace(contentRoot);
         _spriteBatch = new SpriteBatch(graphicsDevice);
-        var requiredTextures = BirdHellVisuals.PlayerIdle.Frames
+        var requiredTextures = BirdHellVisuals.PlayerClips.SelectMany(clip => clip.Frames)
             .Concat(BirdHellVisuals.Enemy.Frames)
             .Concat(BirdHellVisuals.Projectile.Frames)
             .Select(frame => frame.Region.TextureId)
@@ -88,6 +88,13 @@ public sealed class SpritePresentation : IDisposable
         try
         {
             using var stream = File.OpenRead(path);
+            if (textureId == BirdHellVisuals.PlayerTexture)
+            {
+                // The generated atlas is a conventional straight-alpha PNG. SpriteBatch's
+                // AlphaBlend state expects premultiplied color, so convert during upload;
+                // otherwise bilinear sampling adds low-alpha edge RGB as a light halo.
+                return Texture2D.FromStream(_graphicsDevice, stream, DefaultColorProcessors.PremultiplyAlpha);
+            }
             return Texture2D.FromStream(_graphicsDevice, stream);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)

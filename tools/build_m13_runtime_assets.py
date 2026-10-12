@@ -47,6 +47,8 @@ PLAYER_PIVOT_Y = 88
 PLAYER_GROUND_BASELINE = 160
 PLAYER_COLUMNS = 9
 PLAYER_ROWS = 6
+PLAYER_MIN_GUTTER = 4
+PLAYER_REPLACEMENT_RUN_SOURCE = ROOT / "art/Source/Player/player_anime_explorer_run_v2.png"
 
 
 def alpha_components(width: int, height: int, pixels: bytearray) -> list[list[int]]:
@@ -265,6 +267,18 @@ def paste_cell(
         atlas[target_start:target_start + cell_width * 4] = cell[source_start:source_start + cell_width * 4]
 
 
+def extract_cell(
+    strip: bytearray, strip_width: int, left: int, cell_width: int, cell_height: int
+) -> bytearray:
+    cell = bytearray(cell_width * cell_height * 4)
+    for y in range(cell_height):
+        source_start = (y * strip_width + left) * 4
+        target_start = y * cell_width * 4
+        cell[target_start:target_start + cell_width * 4] = strip[
+            source_start:source_start + cell_width * 4]
+    return cell
+
+
 def build_bird() -> None:
     source_hash = hashlib.sha256(SOURCE.read_bytes()).hexdigest()
     if source_hash != EXPECTED_SOURCE_HASH:
@@ -328,6 +342,17 @@ def build_player() -> None:
         hashes[path] = actual_hash
         loaded[path] = read_rgba_png(path)
 
+    replacement_run: tuple[int, int, bytearray] | None = None
+    if PLAYER_REPLACEMENT_RUN_SOURCE.exists():
+        replacement_run = read_rgba_png(PLAYER_REPLACEMENT_RUN_SOURCE)
+        expected_dimensions = (PLAYER_CELL_WIDTH * 8, PLAYER_CELL_HEIGHT)
+        if replacement_run[:2] != expected_dimensions:
+            raise RuntimeError(
+                f"Replacement Run strip is {replacement_run[0]}x{replacement_run[1]}; "
+                f"expected {expected_dimensions[0]}x{expected_dimensions[1]}")
+        hashes[PLAYER_REPLACEMENT_RUN_SOURCE] = hashlib.sha256(
+            PLAYER_REPLACEMENT_RUN_SOURCE.read_bytes()).hexdigest()
+
     main_width, main_height, main_pixels = loaded[PLAYER_MAIN]
     main_components = substantial_components(main_width, main_height, main_pixels, 5_000)
     bounded = [(component, component_bounds(component, main_width)) for component in main_components]
@@ -387,7 +412,10 @@ def build_player() -> None:
         "Airborne": (0, True), "Crouch": (0, True), "Roll": (12, False), "Attack": (14, False),
     }
     source_states = {
-        "Idle": "approved idle row", "Run": "approved run row", "Jump": "approved first-jump/takeoff row",
+        "Idle": "approved idle row",
+        "Run": ("approved dedicated replacement strip" if replacement_run else
+                "rejected Milestone 13 source material; retained in atlas only and not used by production"),
+        "Jump": "approved first-jump/takeoff row",
         "Airborne": "dedicated center sustained-air pose", "Crouch": "dedicated left crouch pose",
         "Roll": "five valid original roll frames plus rightmost sword-free addon replacement",
         "Attack": "seven isolated poses from regenerated attack source",
@@ -401,10 +429,18 @@ def build_player() -> None:
         row, first_column = layout[animation]
         frames = []
         for frame_index, (source_key, components, scale, grounded, source_index) in enumerate(frame_specs):
-            source_path, width, height, pixels = sources[source_key]
-            cleaned = cleaned_components(width, height, pixels, components)
-            anchor = player_anchor(components, width, pixels, grounded)
-            cell = render_player_cell(width, height, cleaned, anchor, scale, grounded)
+            if animation == "Run" and replacement_run:
+                width, _, pixels = replacement_run
+                source_path = PLAYER_REPLACEMENT_RUN_SOURCE
+                cell = extract_cell(
+                    pixels, width, frame_index * PLAYER_CELL_WIDTH,
+                    PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT)
+                source_index = frame_index
+            else:
+                source_path, width, height, pixels = sources[source_key]
+                cleaned = cleaned_components(width, height, pixels, components)
+                anchor = player_anchor(components, width, pixels, grounded)
+                cell = render_player_cell(width, height, cleaned, anchor, scale, grounded)
             column = first_column + frame_index
             left, top = column * PLAYER_CELL_WIDTH, row * PLAYER_CELL_HEIGHT
             paste_cell(atlas, atlas_width, cell, PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT, left, top)
@@ -439,12 +475,39 @@ def build_player() -> None:
         "atlas": {"width": atlas_width, "height": atlas_height,
                   "columns": PLAYER_COLUMNS, "rows": PLAYER_ROWS},
         "sources": [{"path": str(path.relative_to(ROOT)), "sha256": hashes[path]}
-                    for path in (PLAYER_MAIN, PLAYER_ADDONS, PLAYER_ATTACK)],
+                    for path in (PLAYER_MAIN, PLAYER_ADDONS, PLAYER_ATTACK,
+                                 *([PLAYER_REPLACEMENT_RUN_SOURCE] if replacement_run else []))],
         "normalization": {
             "alphaCoreThreshold": ALPHA_CORE,
             "fringeRadiusPixels": FRINGE_RADIUS,
+            "minimumTransparentGutterPixels": PLAYER_MIN_GUTTER,
+            "pngAlphaMode": "straight",
+            "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha",
             "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
-            "integrationStatus": "prepared only; production still uses legacy player art",
+            "integrationStatus": "production; rejected Run row isolated behind stable Idle-frame fallback",
+        },
+        "replacementRun": {
+            "source": str(PLAYER_REPLACEMENT_RUN_SOURCE.relative_to(ROOT)),
+            "targetRuntime": str(PLAYER_OUTPUT.relative_to(ROOT)),
+            "frameCount": 8,
+            "frameOrder": [
+                "right contact", "right recoil", "right passing", "right airborne",
+                "left contact", "left recoil", "left passing", "left airborne",
+            ],
+            "nativeFacing": "right",
+            "cellWidth": PLAYER_CELL_WIDTH,
+            "cellHeight": PLAYER_CELL_HEIGHT,
+            "stripWidth": PLAYER_CELL_WIDTH * 8,
+            "stripHeight": PLAYER_CELL_HEIGHT,
+            "pivot": {"x": PLAYER_PIVOT_X, "y": PLAYER_PIVOT_Y},
+            "groundBaselineY": PLAYER_GROUND_BASELINE,
+            "fps": 12,
+            "loop": True,
+            "atlasPlacement": {"row": 1, "firstColumn": 0, "lastColumn": 7},
+            "minimumTransparentGutterPixels": 14,
+            "maximumVisibleBoundsInclusive": {"left": 16, "top": 16, "right": 175, "bottom": 161},
+            "alphaMode": "straight RGBA; zero RGB at alpha 0; no matte contamination; premultiplied at runtime upload",
+            "status": "integrated" if replacement_run else "awaiting source strip",
         },
         "animations": animations,
     }

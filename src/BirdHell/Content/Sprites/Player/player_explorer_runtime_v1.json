@@ -43,8 +43,52 @@
   "normalization": {
     "alphaCoreThreshold": 128,
     "fringeRadiusPixels": 3,
+    "minimumTransparentGutterPixels": 4,
+    "pngAlphaMode": "straight",
+    "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha",
     "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
-    "integrationStatus": "prepared only; production still uses legacy player art"
+    "integrationStatus": "production; rejected Run row isolated behind stable Idle-frame fallback"
+  },
+  "replacementRun": {
+    "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+    "targetRuntime": "src/BirdHell/Content/Sprites/Player/player_explorer_runtime_v1.png",
+    "frameCount": 8,
+    "frameOrder": [
+      "right contact",
+      "right recoil",
+      "right passing",
+      "right airborne",
+      "left contact",
+      "left recoil",
+      "left passing",
+      "left airborne"
+    ],
+    "nativeFacing": "right",
+    "cellWidth": 192,
+    "cellHeight": 176,
+    "stripWidth": 1536,
+    "stripHeight": 176,
+    "pivot": {
+      "x": 96,
+      "y": 88
+    },
+    "groundBaselineY": 160,
+    "fps": 12,
+    "loop": true,
+    "atlasPlacement": {
+      "row": 1,
+      "firstColumn": 0,
+      "lastColumn": 7
+    },
+    "minimumTransparentGutterPixels": 14,
+    "maximumVisibleBoundsInclusive": {
+      "left": 16,
+      "top": 16,
+      "right": 175,
+      "bottom": 161
+    },
+    "alphaMode": "straight RGBA; zero RGB at alpha 0; no matte contamination; premultiplied at runtime upload",
+    "status": "awaiting source strip"
   },
   "animations": {
     "Idle": {
@@ -230,7 +274,7 @@
       ],
       "fps": 12,
       "loop": true,
-      "sourceState": "approved run row",
+      "sourceState": "rejected Milestone 13 source material; retained in atlas only and not used by production",
       "anchor": "groundBaseline"
     },
     "Jump": {

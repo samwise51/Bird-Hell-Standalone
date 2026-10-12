@@ -5,21 +5,38 @@ namespace BirdHell.Presentation;
 /// <summary>Audited Unity sprite regions and effective animation rates encoded for the standalone port.</summary>
 public static class BirdHellVisuals
 {
-    public const string PlayerTexture = "Sprites/Player/adventurer-v1.5-Sheet.png";
+    public const string PlayerTexture = "Sprites/Player/player_explorer_runtime_v1.png";
     public const string ProjectileTexture = "Sprites/Projectile/sword-attack-animation.png";
     public const string BackgroundTexture = "Sprites/Background/back.png";
     public const float PixelsPerUnit = 100f;
+    public const int PlayerAtlasWidth = 1728;
+    public const int PlayerAtlasHeight = 1056;
+    public const int PlayerCellWidth = 192;
+    public const int PlayerCellHeight = 176;
+    public const float PlayerWorldScale = 1.2f;
+    public const float PlayerReferenceVisibleBodyHeightPixels = 123f;
     public const SpriteTextureFilter BackgroundFilter = SpriteTextureFilter.Point;
+    public const HorizontalFacing PlayerNativeFacing = HorizontalFacing.Right;
     public const HorizontalFacing EnemyNativeFacing = HorizontalFacing.Left;
+    public static readonly Vector2 PlayerBodyPivotPixels = new(96f, 88f);
+    public static readonly Vector2 PlayerGroundBaselinePixels = new(96f, 160f);
     public static readonly Vector2 BackgroundLocalPosition = new(-2.66f, -5f);
     public static readonly Vector2 BackgroundWorldSize = new(38.4f, 24f);
 
-    public static SpriteAnimationClip PlayerIdle { get; } = PlayerClip("Idle", [0, 1, 2, 3], 12f * 0.35f, true);
-    public static SpriteAnimationClip PlayerRun { get; } = PlayerClip("Run", [8, 9, 10, 11], 12f, true);
-    public static SpriteAnimationClip PlayerJump { get; } = PlayerClip("Jump", [12, 13, 14, 15], 60f * 0.2f, true);
-    public static SpriteAnimationClip PlayerRoll { get; } = PlayerClip("Roll", [18, 19, 20, 21, 17], 10f, false);
-    public static SpriteAnimationClip PlayerCrouch { get; } = PlayerClip("Crouch", [4, 5, 6, 7], 12f * 0.5f, true);
-    public static SpriteAnimationClip PlayerAttack { get; } = PlayerClip("Attack", [47, 48, 49, 50, 47], 60f * 1.5f, false);
+    public static SpriteAnimationClip PlayerIdle { get; } = PlayerClip("Idle", 0, 0, 9, 7f, true);
+    // Temporary production fallback: the rejected source run strip remains isolated in atlas
+    // row 1 until art/Source/Player/player_anime_explorer_run_v2.png replaces it.
+    public static SpriteAnimationClip PlayerRun { get; } = PlayerClip("Run", 0, 0, 1, 0f, true);
+    public static SpriteAnimationClip PlayerJump { get; } = PlayerClip("Jump", 2, 0, 6, 10f, false);
+    public static SpriteAnimationClip PlayerAirborne { get; } = PlayerClip("Airborne", 3, 0, 1, 0f, true);
+    public static SpriteAnimationClip PlayerCrouch { get; } = PlayerClip("Crouch", 3, 1, 1, 0f, true);
+    public static SpriteAnimationClip PlayerRoll { get; } = PlayerClip("Roll", 4, 0, 6, 12f, false);
+    public static SpriteAnimationClip PlayerAttack { get; } = PlayerClip("Attack", 5, 0, 7, 14f, false);
+
+    public static IReadOnlyList<SpriteAnimationClip> PlayerClips { get; } =
+    [
+        PlayerIdle, PlayerRun, PlayerJump, PlayerAirborne, PlayerCrouch, PlayerRoll, PlayerAttack,
+    ];
 
     public static SpriteAnimationClip Enemy { get; } = new(
         "Eagle",
@@ -40,17 +57,32 @@ public static class BirdHellVisuals
         },
         true);
 
-    private static SpriteAnimationClip PlayerClip(string name, int[] indices, float effectiveFramesPerSecond, bool loop) =>
-        new(name, indices.Select(index => new SpriteFrame(PlayerRegion(index), 1f / effectiveFramesPerSecond)).ToArray(), loop);
+    private static SpriteAnimationClip PlayerClip(
+        string name,
+        int row,
+        int firstColumn,
+        int frameCount,
+        float framesPerSecond,
+        bool loop)
+    {
+        var frameDuration = framesPerSecond > 0f ? 1f / framesPerSecond : 1f;
+        return new SpriteAnimationClip(
+            name,
+            Enumerable.Range(firstColumn, frameCount)
+                .Select(column => new SpriteFrame(PlayerRegion(column, row), frameDuration))
+                .ToArray(),
+            loop);
+    }
 
-    private static SpriteRegion PlayerRegion(int index) => new(
+    private static SpriteRegion PlayerRegion(int column, int row) => new(
         PlayerTexture,
-        new PixelRectangle(index % 7 * 50, 592 - (index / 7 + 1) * 37, 50, 37),
-        new Vector2(0.5f),
+        new PixelRectangle(column * PlayerCellWidth, row * PlayerCellHeight, PlayerCellWidth, PlayerCellHeight),
+        new Vector2(
+            PlayerBodyPivotPixels.X / PlayerCellWidth,
+            PlayerBodyPivotPixels.Y / PlayerCellHeight),
         PixelsPerUnit,
-        4f,
-        SpriteTextureFilter.Linear,
-        PixelCoordinateOrigin.BottomLeft);
+        PlayerWorldScale,
+        SpriteTextureFilter.Linear);
 
     private static SpriteFrame ProjectileFrame(int x, int y, int width, int height) => new(
         new SpriteRegion(ProjectileTexture, new PixelRectangle(x, y, width, height), Vector2.Zero, PixelsPerUnit, 1f,

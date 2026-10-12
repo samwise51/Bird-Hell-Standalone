@@ -12,6 +12,7 @@ from clean_environment_edges import read_rgba_png, rgba_at
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PLAYER_MIN_GUTTER = 4
 
 
 def require(condition: bool, message: str) -> None:
@@ -107,6 +108,21 @@ def validate_player() -> None:
             "Player atlas dimensions do not match its manifest")
     require(manifest["nativeFacing"] == "right", "Player native facing must be right")
     require(manifest["filtering"] == "linear", "Player filtering metadata must be linear")
+    normalization = manifest["normalization"]
+    require(normalization["pngAlphaMode"] == "straight"
+            and normalization["runtimeUploadAlphaMode"]
+            == "premultiply with DefaultColorProcessors.PremultiplyAlpha",
+            "Player straight-alpha PNG / premultiplied runtime upload contract is missing")
+    presentation_source = (ROOT / "src/BirdHell/Presentation/SpritePresentation.cs").read_text(encoding="utf-8")
+    require("textureId == BirdHellVisuals.PlayerTexture" in presentation_source
+            and "DefaultColorProcessors.PremultiplyAlpha" in presentation_source,
+            "Player texture upload does not apply the manifest's premultiplication contract")
+    replacement = manifest["replacementRun"]
+    require(replacement["source"] == "art/Source/Player/player_anime_explorer_run_v2.png"
+            and replacement["frameCount"] == 8
+            and (replacement["cellWidth"], replacement["cellHeight"]) == (192, 176)
+            and replacement["atlasPlacement"] == {"row": 1, "firstColumn": 0, "lastColumn": 7},
+            "Replacement Run integration target is incorrect")
     expected = {
         "Idle": (9, 7, True), "Run": (8, 12, True), "Jump": (6, 10, False),
         "Airborne": (1, 0, True), "Crouch": (1, 0, True), "Roll": (6, 12, False),
@@ -153,8 +169,16 @@ def validate_player() -> None:
             require(min_x > 0 and min_y > 0 and max_x < rectangle["width"] - 1
                     and max_y < rectangle["height"] - 1,
                     f"Player {animation} frame {frame_index} clips or lacks transparent padding")
+            margins = (min_x, rectangle["width"] - 1 - max_x,
+                       min_y, rectangle["height"] - 1 - max_y)
+            require(min(margins) >= PLAYER_MIN_GUTTER,
+                    f"Player {animation} frame {frame_index} has only {min(margins)}px gutter")
             for x, y in occupied:
-                alpha = rgba_at(pixels, width, rectangle["x"] + x, rectangle["y"] + y)[3]
+                red, green, blue, alpha = rgba_at(
+                    pixels, width, rectangle["x"] + x, rectangle["y"] + y)
+                premultiplied = tuple(round(channel * alpha / 255) for channel in (red, green, blue))
+                require(max(premultiplied) <= alpha,
+                        f"Player {animation} frame {frame_index} cannot be premultiplied safely at ({x}, {y})")
                 if alpha >= 32:
                     continue
                 require(any((nx, ny) in substantial
@@ -177,6 +201,15 @@ def validate_player() -> None:
     attack = manifest["animations"]["Attack"]["frames"]
     require([frame["sourceOrderIndex"] for frame in attack] == list(range(7)),
             "Attack source-order indices are not 0-6")
+    replacement_source = ROOT / replacement["source"]
+    run_state = manifest["animations"]["Run"]["sourceState"]
+    if replacement_source.exists():
+        require(run_state == "approved dedicated replacement strip"
+                and all(frame["source"] == replacement["source"] for frame in manifest["animations"]["Run"]["frames"]),
+                "Present replacement Run strip was not integrated")
+    else:
+        require(run_state.startswith("rejected") and replacement["status"] == "awaiting source strip",
+                "Rejected Run source material is not explicitly isolated in the manifest")
     used = {(rectangle["x"] // manifest["cellWidth"], rectangle["y"] // manifest["cellHeight"])
             for rectangle in rectangles}
     for row in range(manifest["atlas"]["rows"]):
