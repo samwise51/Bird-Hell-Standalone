@@ -13,9 +13,9 @@ Assert(BirdHellVisuals.PlayerClips.Count == 7 &&
            new[] { "Idle", "Run", "Jump", "Airborne", "Crouch", "Roll", "Attack" }),
     "The normalized player atlas does not expose exactly seven player clips.");
 CheckPlayerClip(BirdHellVisuals.PlayerIdle, 0, 0, 9, 1f / 7f, true);
-CheckPlayerClip(BirdHellVisuals.PlayerRun, 0, 0, 1, 1f, true);
-Assert(BirdHellVisuals.PlayerRun.Frames[0].Region.Source == BirdHellVisuals.PlayerIdle.Frames[0].Region.Source,
-    "Temporary Run fallback does not use the stable first Idle pose.");
+CheckPlayerClip(BirdHellVisuals.PlayerRun, 1, 0, 8, 1f / 12f, true);
+Assert(BirdHellVisuals.PlayerRun.Frames[0].Region.Source != BirdHellVisuals.PlayerIdle.Frames[0].Region.Source,
+    "Production Run still uses the temporary Idle fallback.");
 CheckPlayerClip(BirdHellVisuals.PlayerJump, 2, 0, 6, 1f / 10f, false);
 CheckPlayerClip(BirdHellVisuals.PlayerAirborne, 3, 0, 1, 1f, true);
 CheckPlayerClip(BirdHellVisuals.PlayerCrouch, 3, 1, 1, 1f, true);
@@ -30,7 +30,7 @@ Assert(jumpPlayback.IsFinished && jumpPlayback.CurrentFrameIndex == 5,
 var staticPlayback = new AnimationPlayback(BirdHellVisuals.PlayerAirborne);
 staticPlayback.Advance(12f);
 Assert(staticPlayback.CurrentFrameIndex == 0, "The Airborne pose is not static.");
-Console.WriteLine("PASS: normalized atlas path, six approved clips, and isolated one-frame Run fallback");
+Console.WriteLine("PASS: normalized atlas path and approved eight-frame replacement Run cycle");
 
 AssertVector(BirdHellVisuals.PlayerIdle.Frames[0].Region.WorldSize, new Vector2(2.304f, 2.112f),
     "Player cell world dimensions do not use the named normalized-atlas scale.");

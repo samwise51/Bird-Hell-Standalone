@@ -24,9 +24,7 @@ public static class BirdHellVisuals
     public static readonly Vector2 BackgroundWorldSize = new(38.4f, 24f);
 
     public static SpriteAnimationClip PlayerIdle { get; } = PlayerClip("Idle", 0, 0, 9, 7f, true);
-    // Temporary production fallback: the rejected source run strip remains isolated in atlas
-    // row 1 until art/Source/Player/player_anime_explorer_run_v2.png replaces it.
-    public static SpriteAnimationClip PlayerRun { get; } = PlayerClip("Run", 0, 0, 1, 0f, true);
+    public static SpriteAnimationClip PlayerRun { get; } = PlayerClip("Run", 1, 0, 8, 12f, true);
     public static SpriteAnimationClip PlayerJump { get; } = PlayerClip("Jump", 2, 0, 6, 10f, false);
     public static SpriteAnimationClip PlayerAirborne { get; } = PlayerClip("Airborne", 3, 0, 1, 0f, true);
     public static SpriteAnimationClip PlayerCrouch { get; } = PlayerClip("Crouch", 3, 1, 1, 0f, true);

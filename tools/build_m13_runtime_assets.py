@@ -45,6 +45,7 @@ PLAYER_CELL_HEIGHT = 176
 PLAYER_PIVOT_X = 96
 PLAYER_PIVOT_Y = 88
 PLAYER_GROUND_BASELINE = 160
+PLAYER_RUN_SCALE_CORRECTION = 0.873
 PLAYER_COLUMNS = 9
 PLAYER_ROWS = 6
 PLAYER_MIN_GUTTER = 4
@@ -279,6 +280,105 @@ def extract_cell(
     return cell
 
 
+def replacement_run_cells(width: int, height: int, strip: bytearray) -> list[bytearray]:
+    expected_dimensions = (PLAYER_CELL_WIDTH * 8, PLAYER_CELL_HEIGHT)
+    if (width, height) != expected_dimensions:
+        raise RuntimeError(
+            f"Replacement Run strip is {width}x{height}; "
+            f"expected {expected_dimensions[0]}x{expected_dimensions[1]}")
+
+    cells: list[bytearray] = []
+    core_sizes: list[int] = []
+    core_bottoms: list[int] = []
+    for frame_index in range(8):
+        cell = extract_cell(
+            strip, width, frame_index * PLAYER_CELL_WIDTH,
+            PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT)
+        occupied: list[tuple[int, int]] = []
+        core: list[int] = []
+        for index in range(PLAYER_CELL_WIDTH * PLAYER_CELL_HEIGHT):
+            y, x = divmod(index, PLAYER_CELL_WIDTH)
+            red, green, blue, alpha = rgba_at(cell, PLAYER_CELL_WIDTH, x, y)
+            if alpha == 0 and (red, green, blue) != (0, 0, 0):
+                raise RuntimeError(
+                    f"Replacement Run frame {frame_index} has RGB in a transparent pixel at ({x}, {y})")
+            if alpha:
+                occupied.append((x, y))
+            if alpha >= ALPHA_CORE:
+                core.append(index)
+        if not occupied or not core:
+            raise RuntimeError(f"Replacement Run frame {frame_index} is empty")
+        min_x, max_x = min(x for x, _ in occupied), max(x for x, _ in occupied)
+        min_y, max_y = min(y for _, y in occupied), max(y for _, y in occupied)
+        if not (16 <= min_x <= max_x <= 175 and 16 <= min_y <= max_y <= 161):
+            raise RuntimeError(
+                f"Replacement Run frame {frame_index} visible bounds "
+                f"({min_x}, {min_y})..({max_x}, {max_y}) exceed the approved envelope")
+        margins = (min_x, PLAYER_CELL_WIDTH - 1 - max_x,
+                   min_y, PLAYER_CELL_HEIGHT - 1 - max_y)
+        if min(margins) < 14:
+            raise RuntimeError(
+                f"Replacement Run frame {frame_index} has only {min(margins)}px transparent gutter")
+        core_sizes.append(len(core))
+        core_bottoms.append(max(index // PLAYER_CELL_WIDTH for index in core))
+
+        cleaned = cleaned_components(
+            PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT, cell, [core])
+        scaled = render_player_cell(
+            PLAYER_CELL_WIDTH,
+            PLAYER_CELL_HEIGHT,
+            cleaned,
+            (float(PLAYER_PIVOT_X), float(PLAYER_GROUND_BASELINE)),
+            PLAYER_RUN_SCALE_CORRECTION,
+            True,
+        )
+
+        # Bilinear sampling can create a one-pixel fringe outside the geometric
+        # projection. Keep the runtime envelope centered on x=96 and aligned to
+        # y=160, then normalize the newly sampled edge colors.
+        scaled_bounds = (
+            round(PLAYER_PIVOT_X + (min_x - PLAYER_PIVOT_X) * PLAYER_RUN_SCALE_CORRECTION),
+            round(PLAYER_GROUND_BASELINE
+                  + (min_y - PLAYER_GROUND_BASELINE) * PLAYER_RUN_SCALE_CORRECTION),
+            round(PLAYER_PIVOT_X + (max_x - PLAYER_PIVOT_X) * PLAYER_RUN_SCALE_CORRECTION),
+            round(PLAYER_GROUND_BASELINE
+                  + (max_y - PLAYER_GROUND_BASELINE) * PLAYER_RUN_SCALE_CORRECTION),
+        )
+        if not (16 <= scaled_bounds[0] <= scaled_bounds[2] <= 175
+                and 16 <= scaled_bounds[1] <= scaled_bounds[3] <= 161):
+            raise RuntimeError(
+                f"Scaled replacement Run frame {frame_index} bounds {scaled_bounds} "
+                "exceed the approved envelope")
+        scaled_margins = (
+            scaled_bounds[0], PLAYER_CELL_WIDTH - 1 - scaled_bounds[2],
+            scaled_bounds[1], PLAYER_CELL_HEIGHT - 1 - scaled_bounds[3],
+        )
+        if min(scaled_margins) < 14:
+            raise RuntimeError(
+                f"Scaled replacement Run frame {frame_index} has only "
+                f"{min(scaled_margins)}px transparent gutter")
+        for y in range(PLAYER_CELL_HEIGHT):
+            for x in range(PLAYER_CELL_WIDTH):
+                if not (scaled_bounds[0] <= x <= scaled_bounds[2]
+                        and scaled_bounds[1] <= y <= scaled_bounds[3]):
+                    set_rgba(scaled, PLAYER_CELL_WIDTH, x, y, (0, 0, 0, 0))
+        scaled_core = [
+            index for index in range(PLAYER_CELL_WIDTH * PLAYER_CELL_HEIGHT)
+            if scaled[index * 4 + 3] >= ALPHA_CORE
+        ]
+        if not scaled_core:
+            raise RuntimeError(f"Scaled replacement Run frame {frame_index} is empty")
+        cells.append(cleaned_components(
+            PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT, scaled, [scaled_core]))
+
+    if max(core_sizes) / min(core_sizes) > 1.12:
+        raise RuntimeError(f"Replacement Run character scale varies excessively: {core_sizes}")
+    if core_bottoms[0] != PLAYER_GROUND_BASELINE or core_bottoms[4] != PLAYER_GROUND_BASELINE:
+        raise RuntimeError(
+            f"Replacement Run contact frames do not meet baseline {PLAYER_GROUND_BASELINE}: {core_bottoms}")
+    return cells
+
+
 def build_bird() -> None:
     source_hash = hashlib.sha256(SOURCE.read_bytes()).hexdigest()
     if source_hash != EXPECTED_SOURCE_HASH:
@@ -343,13 +443,10 @@ def build_player() -> None:
         loaded[path] = read_rgba_png(path)
 
     replacement_run: tuple[int, int, bytearray] | None = None
+    replacement_cells: list[bytearray] | None = None
     if PLAYER_REPLACEMENT_RUN_SOURCE.exists():
         replacement_run = read_rgba_png(PLAYER_REPLACEMENT_RUN_SOURCE)
-        expected_dimensions = (PLAYER_CELL_WIDTH * 8, PLAYER_CELL_HEIGHT)
-        if replacement_run[:2] != expected_dimensions:
-            raise RuntimeError(
-                f"Replacement Run strip is {replacement_run[0]}x{replacement_run[1]}; "
-                f"expected {expected_dimensions[0]}x{expected_dimensions[1]}")
+        replacement_cells = replacement_run_cells(*replacement_run)
         hashes[PLAYER_REPLACEMENT_RUN_SOURCE] = hashlib.sha256(
             PLAYER_REPLACEMENT_RUN_SOURCE.read_bytes()).hexdigest()
 
@@ -413,7 +510,7 @@ def build_player() -> None:
     }
     source_states = {
         "Idle": "approved idle row",
-        "Run": ("approved dedicated replacement strip" if replacement_run else
+        "Run": ("approved replacement run cycle" if replacement_run else
                 "rejected Milestone 13 source material; retained in atlas only and not used by production"),
         "Jump": "approved first-jump/takeoff row",
         "Airborne": "dedicated center sustained-air pose", "Crouch": "dedicated left crouch pose",
@@ -429,12 +526,9 @@ def build_player() -> None:
         row, first_column = layout[animation]
         frames = []
         for frame_index, (source_key, components, scale, grounded, source_index) in enumerate(frame_specs):
-            if animation == "Run" and replacement_run:
-                width, _, pixels = replacement_run
+            if animation == "Run" and replacement_cells:
                 source_path = PLAYER_REPLACEMENT_RUN_SOURCE
-                cell = extract_cell(
-                    pixels, width, frame_index * PLAYER_CELL_WIDTH,
-                    PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT)
+                cell = replacement_cells[frame_index]
                 source_index = frame_index
             else:
                 source_path, width, height, pixels = sources[source_key]
@@ -458,6 +552,9 @@ def build_player() -> None:
             "sourceState": source_states[animation],
             "anchor": "groundBaseline" if frame_specs[0][3] else "body",
         }
+        if animation == "Run" and replacement_run:
+            animations[animation]["status"] = "approved replacement run cycle"
+            animations[animation]["nativeFacing"] = "right"
 
     write_rgba_png(PLAYER_OUTPUT, atlas_width, atlas_height, atlas)
     manifest = {
@@ -484,7 +581,8 @@ def build_player() -> None:
             "pngAlphaMode": "straight",
             "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha",
             "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
-            "integrationStatus": "production; rejected Run row isolated behind stable Idle-frame fallback",
+            "integrationStatus": ("production; replacement Run row approved" if replacement_run else
+                                  "production; rejected Run row isolated behind stable Idle-frame fallback"),
         },
         "replacementRun": {
             "source": str(PLAYER_REPLACEMENT_RUN_SOURCE.relative_to(ROOT)),
@@ -501,13 +599,17 @@ def build_player() -> None:
             "stripHeight": PLAYER_CELL_HEIGHT,
             "pivot": {"x": PLAYER_PIVOT_X, "y": PLAYER_PIVOT_Y},
             "groundBaselineY": PLAYER_GROUND_BASELINE,
+            "runtimeScaleCorrection": PLAYER_RUN_SCALE_CORRECTION,
+            "runtimeScaleReason": "visual-scale parity with Idle after host-test correction",
+            "runtimeScaleOrigin": {"x": PLAYER_PIVOT_X, "y": PLAYER_GROUND_BASELINE},
+            "runtimeScaleAlignment": "centered horizontally and bottom-aligned",
             "fps": 12,
             "loop": True,
             "atlasPlacement": {"row": 1, "firstColumn": 0, "lastColumn": 7},
             "minimumTransparentGutterPixels": 14,
             "maximumVisibleBoundsInclusive": {"left": 16, "top": 16, "right": 175, "bottom": 161},
             "alphaMode": "straight RGBA; zero RGB at alpha 0; no matte contamination; premultiplied at runtime upload",
-            "status": "integrated" if replacement_run else "awaiting source strip",
+            "status": "approved replacement run cycle" if replacement_run else "awaiting source strip",
         },
         "animations": animations,
     }

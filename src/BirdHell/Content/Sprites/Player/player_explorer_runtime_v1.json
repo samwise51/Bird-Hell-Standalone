@@ -38,6 +38,10 @@
     {
       "path": "art/Source/Player/player_anime_explorer_attack_v1.png",
       "sha256": "89e5065058dacf1b6967f783e3939d628a5cd9dec6f0fc530ff13e242778f407"
+    },
+    {
+      "path": "art/Source/Player/player_anime_explorer_run_v2.png",
+      "sha256": "c4dbd78e87759dfefc1a1bed760560f7c9967157ab884771c72155a6a1a09329"
     }
   ],
   "normalization": {
@@ -47,7 +51,7 @@
     "pngAlphaMode": "straight",
     "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha",
     "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
-    "integrationStatus": "production; rejected Run row isolated behind stable Idle-frame fallback"
+    "integrationStatus": "production; replacement Run row approved"
   },
   "replacementRun": {
     "source": "art/Source/Player/player_anime_explorer_run_v2.png",
@@ -73,6 +77,13 @@
       "y": 88
     },
     "groundBaselineY": 160,
+    "runtimeScaleCorrection": 0.873,
+    "runtimeScaleReason": "visual-scale parity with Idle after host-test correction",
+    "runtimeScaleOrigin": {
+      "x": 96,
+      "y": 160
+    },
+    "runtimeScaleAlignment": "centered horizontally and bottom-aligned",
     "fps": 12,
     "loop": true,
     "atlasPlacement": {
@@ -88,7 +99,7 @@
       "bottom": 161
     },
     "alphaMode": "straight RGBA; zero RGB at alpha 0; no matte contamination; premultiplied at runtime upload",
-    "status": "awaiting source strip"
+    "status": "approved replacement run cycle"
   },
   "animations": {
     "Idle": {
@@ -193,7 +204,7 @@
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 0,
             "y": 176,
@@ -203,7 +214,7 @@
         },
         {
           "sourceOrderIndex": 1,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 192,
             "y": 176,
@@ -213,7 +224,7 @@
         },
         {
           "sourceOrderIndex": 2,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 384,
             "y": 176,
@@ -223,7 +234,7 @@
         },
         {
           "sourceOrderIndex": 3,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 576,
             "y": 176,
@@ -233,7 +244,7 @@
         },
         {
           "sourceOrderIndex": 4,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 768,
             "y": 176,
@@ -243,7 +254,7 @@
         },
         {
           "sourceOrderIndex": 5,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 960,
             "y": 176,
@@ -253,7 +264,7 @@
         },
         {
           "sourceOrderIndex": 6,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 1152,
             "y": 176,
@@ -263,7 +274,7 @@
         },
         {
           "sourceOrderIndex": 7,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
           "rectangle": {
             "x": 1344,
             "y": 176,
@@ -274,8 +285,10 @@
       ],
       "fps": 12,
       "loop": true,
-      "sourceState": "rejected Milestone 13 source material; retained in atlas only and not used by production",
-      "anchor": "groundBaseline"
+      "sourceState": "approved replacement run cycle",
+      "anchor": "groundBaseline",
+      "status": "approved replacement run cycle",
+      "nativeFacing": "right"
     },
     "Jump": {
       "frames": [
