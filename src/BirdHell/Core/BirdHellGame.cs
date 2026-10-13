@@ -1114,7 +1114,7 @@ public sealed class BirdHellGame : Game
         if (_run is null) return;
         foreach (var enemy in _run.Enemies.LivingEnemies)
             sprites.Draw(
-                _animations.Enemy.CurrentFrame,
+                _animations.EnemyFrame(_run.Seed, enemy.Id),
                 enemy.Position,
                 WorldAnimationState.EnemyFlip(enemy.FacingDirection),
                 HitFeedbackPresentation.TintFor(enemy.DamageFlashTime));

@@ -88,9 +88,9 @@ public sealed class SpritePresentation : IDisposable
         try
         {
             using var stream = File.OpenRead(path);
-            if (textureId == BirdHellVisuals.PlayerTexture)
+            if (RequiresPremultipliedAlphaUpload(textureId))
             {
-                // The generated atlas is a conventional straight-alpha PNG. SpriteBatch's
+                // The generated runtime atlases are conventional straight-alpha PNGs. SpriteBatch's
                 // AlphaBlend state expects premultiplied color, so convert during upload;
                 // otherwise bilinear sampling adds low-alpha edge RGB as a light halo.
                 return Texture2D.FromStream(_graphicsDevice, stream, DefaultColorProcessors.PremultiplyAlpha);
@@ -105,6 +105,9 @@ public sealed class SpritePresentation : IDisposable
                 exception);
         }
     }
+
+    public static bool RequiresPremultipliedAlphaUpload(string textureId) =>
+        textureId == BirdHellVisuals.PlayerTexture || textureId == BirdHellVisuals.EnemyTexture;
 
     public void Dispose()
     {

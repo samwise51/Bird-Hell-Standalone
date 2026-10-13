@@ -34,8 +34,25 @@ Console.WriteLine("PASS: normalized atlas path and approved eight-frame replacem
 
 AssertVector(BirdHellVisuals.PlayerIdle.Frames[0].Region.WorldSize, new Vector2(2.304f, 2.112f),
     "Player cell world dimensions do not use the named normalized-atlas scale.");
-AssertVector(BirdHellVisuals.Enemy.Frames[0].Region.WorldSize, new Vector2(1.2f, 1.23f),
-    "Enemy PPU/root-scale world dimensions are wrong.");
+Assert(BirdHellVisuals.EnemyTexture == "Sprites/Enemy/enemy_bird_purple_flight_runtime_v1.png",
+    "Production enemy texture path does not select the normalized purple-bird atlas.");
+Assert(BirdHellVisuals.EnemyAtlasWidth == 512 && BirdHellVisuals.EnemyAtlasHeight == 480 &&
+       BirdHellVisuals.EnemyCellWidth == 128 && BirdHellVisuals.EnemyCellHeight == 120,
+    "Purple-bird atlas/cell dimensions do not match the manifest.");
+Assert(BirdHellVisuals.Enemy.Frames.Count == 16 && BirdHellVisuals.Enemy.Looping,
+    "Purple-bird Flight must contain 16 looping frames.");
+for (var index = 0; index < BirdHellVisuals.Enemy.Frames.Count; index++)
+{
+    var expected = new PixelRectangle(index % 4 * 128, index / 4 * 120, 128, 120);
+    var frame = BirdHellVisuals.Enemy.Frames[index];
+    Assert(frame.Region.TextureId == BirdHellVisuals.EnemyTexture && frame.Region.Source == expected,
+        $"Purple-bird frame {index} does not map to its row-major 4x4 cell.");
+    AssertNear(frame.Duration, 1f / 12f, $"Purple-bird frame {index} duration is wrong.");
+}
+AssertVector(BirdHellVisuals.Enemy.Frames[0].Region.Pivot, new Vector2(80f / 128f, 72f / 120f),
+    "Purple-bird normalized pivot does not match manifest (80,72).");
+AssertVector(BirdHellVisuals.Enemy.Frames[0].Region.WorldSize, new Vector2(1.664f, 1.56f),
+    "Purple-bird cell world dimensions do not use the named world scale.");
 var bodyPivot = new Vector2(0.5f, 0.5f);
 Assert(BirdHellVisuals.PlayerClips.SelectMany(clip => clip.Frames)
         .All(frame => frame.Region.Pivot == bodyPivot),
@@ -47,7 +64,14 @@ var visibleHeightAt720p = BirdHellVisuals.PlayerReferenceVisibleBodyHeightPixels
                           BirdHellVisuals.PlayerWorldScale / BirdHellVisuals.PixelsPerUnit * 72f;
 Assert(visibleHeightAt720p is >= 105f and <= 120f,
     "Named player scale does not put the normalized 123px body in the 105-120px target at 720p.");
-Console.WriteLine("PASS: fixed body pivot, baseline metadata, and ~106px visible height at 720p");
+var enemyVisibleHeightAt720p = BirdHellVisuals.EnemyReferenceMaximumVisibleHeightPixels *
+                               BirdHellVisuals.EnemyWorldScale / BirdHellVisuals.PixelsPerUnit * 72f;
+Assert(enemyVisibleHeightAt720p is >= 80f and <= 95f,
+    "Named bird scale does not put the tallest measured wing pose in the 80-95px target at 720p.");
+AssertNear(Enemy.OriginalColliderRadius, 0.45807048f, "Enemy collider radius changed during presentation work.");
+AssertVector(Enemy.OriginalColliderOffset, new Vector2(-0.15384216f, -0.07692099f),
+    "Enemy collider offset changed during presentation work.");
+Console.WriteLine("PASS: player and purple-bird pivots, named scales, display sizes, and unchanged enemy collider");
 
 var player = new PlayerAnimationState();
 player.Reset(new PlayerVisualSnapshot(true, true, false, 0f));
@@ -121,9 +145,9 @@ Assert(BirdHellVisuals.PlayerNativeFacing == HorizontalFacing.Right &&
        PlayerAnimationState.FlipForFacing(1) == SpriteFlip.None &&
        PlayerAnimationState.FlipForFacing(-1) == SpriteFlip.Horizontal,
     "Native-right player facing did not map right to unflipped and left to horizontal flip.");
-CheckLoop(BirdHellVisuals.Enemy, [0, 1, 2, 3], 1f / 12f, "enemy");
-Assert(BirdHellVisuals.EnemyNativeFacing == HorizontalFacing.Left,
-    "Presentation metadata does not represent the eagle artwork's native left-facing orientation.");
+CheckLoop(BirdHellVisuals.Enemy, Enumerable.Range(0, 16).ToArray(), 1f / 12f, "enemy");
+Assert(BirdHellVisuals.EnemyNativeFacing == HorizontalFacing.Right,
+    "Presentation metadata does not represent the purple-bird artwork's native right-facing orientation.");
 var facingEnemy = new Enemy(99, Vector2.Zero, 4)
 {
     Velocity = new Vector2(2f, 3f),
@@ -136,11 +160,11 @@ var preservedPath = facingEnemy.Path;
 var preservedPathIndex = facingEnemy.PathIndex;
 var preservedTarget = facingEnemy.SteeringTarget;
 facingEnemy.UpdateFacingFromHorizontalMovement(0.02f);
-Assert(facingEnemy.FacingDirection == 1 && WorldAnimationState.EnemyFlip(facingEnemy.FacingDirection) == SpriteFlip.Horizontal,
-    "Meaningful positive movement did not render the native-left eagle facing right.");
+Assert(facingEnemy.FacingDirection == 1 && WorldAnimationState.EnemyFlip(facingEnemy.FacingDirection) == SpriteFlip.None,
+    "Meaningful positive movement did not render the native-right bird facing right.");
 facingEnemy.UpdateFacingFromHorizontalMovement(-0.02f);
-Assert(facingEnemy.FacingDirection == -1 && WorldAnimationState.EnemyFlip(facingEnemy.FacingDirection) == SpriteFlip.None,
-    "Meaningful negative movement did not render the native-left eagle facing left.");
+Assert(facingEnemy.FacingDirection == -1 && WorldAnimationState.EnemyFlip(facingEnemy.FacingDirection) == SpriteFlip.Horizontal,
+    "Meaningful negative movement did not render the native-right bird facing left.");
 foreach (var nearZero in new[] { -0.009f, 0f, 0.009f })
 {
     facingEnemy.UpdateFacingFromHorizontalMovement(nearZero);
@@ -153,14 +177,18 @@ Console.WriteLine("PASS: player and enemy native-facing mappings preserve gamepl
 
 Assert(BirdHellVisuals.BackgroundFilter == SpriteTextureFilter.Point,
     "Background filter does not match explicit Unity Point filtering.");
-Assert(BirdHellVisuals.Enemy.Frames.All(frame => frame.Region.Filter == SpriteTextureFilter.Point),
-    "Eagle filters do not match explicit Unity Point filtering.");
+Assert(BirdHellVisuals.Enemy.Frames.All(frame => frame.Region.Filter == SpriteTextureFilter.Linear),
+    "Purple-bird atlas does not use manifest-required linear filtering.");
 Assert(BirdHellVisuals.PlayerClips.SelectMany(clip => clip.Frames)
         .All(frame => frame.Region.Filter == SpriteTextureFilter.Linear),
     "Player atlas is not entirely linear filtered.");
 Assert(BirdHellVisuals.Projectile.Frames.All(frame => frame.Region.Filter == SpriteTextureFilter.Linear),
     "Projectile filter does not match Unity's inherited Sprite default (Bilinear).");
-Console.WriteLine("PASS: per-asset filtering keeps the player in the linear-filtered batch");
+Assert(SpritePresentation.RequiresPremultipliedAlphaUpload(BirdHellVisuals.PlayerTexture) &&
+       SpritePresentation.RequiresPremultipliedAlphaUpload(BirdHellVisuals.EnemyTexture) &&
+       !SpritePresentation.RequiresPremultipliedAlphaUpload(BirdHellVisuals.ProjectileTexture),
+    "Straight-alpha runtime atlas upload policy is wrong or changed an unrelated texture.");
+Console.WriteLine("PASS: per-asset filtering and scoped straight-alpha premultiplication policy");
 
 foreach (var clip in BirdHellVisuals.PlayerClips)
 {
@@ -168,7 +196,48 @@ foreach (var clip in BirdHellVisuals.PlayerClips)
            HitFeedbackPresentation.TintFor(0.1f) == HitFeedbackPresentation.DamageTint,
         $"{clip.Name} does not retain normal/damage tint selection.");
 }
-Console.WriteLine("PASS: every new player state remains compatible with white and damage-flash tinting");
+Assert(BirdHellVisuals.Enemy.Frames.All(_ =>
+           HitFeedbackPresentation.TintFor(0f) == HitFeedbackPresentation.NormalTint &&
+           HitFeedbackPresentation.TintFor(0.1f) == HitFeedbackPresentation.DamageTint),
+    "A purple-bird flight frame is incompatible with normal/damage tint selection.");
+Console.WriteLine("PASS: every player state and all 16 bird frames retain damage-flash tinting");
+
+const string timingSeed = "milestone-15-phase-check";
+var parameters = Enumerable.Range(0, 5)
+    .Select(id => EnemyFlightVisualTiming.ForEnemy(timingSeed, id))
+    .ToArray();
+var repeatedParameters = Enumerable.Range(0, 5)
+    .Select(id => EnemyFlightVisualTiming.ForEnemy(timingSeed, id))
+    .ToArray();
+Assert(parameters.SequenceEqual(repeatedParameters),
+    "Same run seed and enemy IDs did not reproduce flight visual parameters.");
+Assert(parameters.Select(item => item.PhaseOffset).Distinct().Count() == 5 &&
+       parameters.All(item => item.PhaseOffset >= 0f && item.PhaseOffset < BirdHellVisuals.Enemy.Duration),
+    "Representative enemy IDs did not receive stable, varied in-cycle phases.");
+Assert(parameters.All(item => item.RateMultiplier >= EnemyFlightVisualTiming.MinimumRateMultiplier &&
+                              item.RateMultiplier <= EnemyFlightVisualTiming.MaximumRateMultiplier),
+    "A deterministic bird flap-rate multiplier is outside the allowed range.");
+var averageRate = Enumerable.Range(0, 100)
+    .Select(id => EnemyFlightVisualTiming.ForEnemy(timingSeed, id).RateMultiplier)
+    .Average();
+Assert(Math.Abs(averageRate - 1d) < 0.01d, "Deterministic bird rates are not centered near nominal 1.0x.");
+var initialFrames = Enumerable.Range(0, 5)
+    .Select(id => EnemyFlightVisualTiming.FrameIndexAt(timingSeed, id, 0d))
+    .ToArray();
+Assert(initialFrames.Distinct().Count() >= 3,
+    "Five representative birds occupy fewer than three initial Flight frames.");
+foreach (var id in Enumerable.Range(0, 5))
+{
+    const double visualTime = 4.25d;
+    var first = EnemyFlightVisualTiming.FrameIndexAt(timingSeed, id, visualTime);
+    var second = EnemyFlightVisualTiming.FrameIndexAt(timingSeed, id, visualTime);
+    var rate = EnemyFlightVisualTiming.ForEnemy(timingSeed, id).RateMultiplier;
+    var wrapped = EnemyFlightVisualTiming.FrameIndexAt(
+        timingSeed, id, visualTime + BirdHellVisuals.Enemy.Duration / rate);
+    Assert(first == second && first == wrapped,
+        $"Enemy {id} frame selection is not deterministic or did not wrap its rate-adjusted cycle.");
+}
+Console.WriteLine("PASS: deterministic varied phases, bounded subtle rates, frame selection, and looping");
 
 PixelRectangle[] projectileRectangles =
 [
@@ -194,20 +263,31 @@ Assert(!player.ShouldRender, "PlayerDead presentation still renders the normal p
 var world = new WorldAnimationState();
 world.Player.Update(new PlayerVisualSnapshot(true, true, false, 0f), true, false, 0.02f);
 world.AdvanceEnemies(0.2f);
+var timeBeforePause = world.EnemyVisualTime;
+var frameBeforePause = world.EnemyFrame(timingSeed, 2);
+Assert(world.EnemyVisualTime == timeBeforePause && world.EnemyFrame(timingSeed, 2) == frameBeforePause,
+    "A paused presentation changed enemy visual time/frame without a fixed-step advance.");
 world.Reset(new PlayerVisualSnapshot(true, true, false, 0f));
 Assert(world.Player.State == PlayerVisualState.Idle && world.Player.Playback.CurrentFrameIndex == 0,
     "R/F5-style reset did not clear attack and restart player animation.");
-Assert(world.Enemy.CurrentFrameIndex == 0, "R/F5-style reset did not deterministically restart enemy animation.");
+Assert(world.EnemyVisualTime == 0d &&
+       world.EnemyFrame(timingSeed, 2) ==
+       BirdHellVisuals.Enemy.Frames[EnemyFlightVisualTiming.FrameIndexAt(timingSeed, 2, 0d)],
+    "R/F5-style reset did not restart deterministic enemy visual time/phase.");
 world.Reset(new PlayerVisualSnapshot(true, true, true, 0f));
 Assert(world.Player.State == PlayerVisualState.Crouch,
     "Reset did not honor physically-held crouch input through normal input polling.");
 var entityAssembly = typeof(Player).Assembly;
-foreach (var type in new[] { typeof(PlayerAnimationState), typeof(WorldAnimationState), typeof(AnimationPlayback) })
+foreach (var type in new[]
+         {
+             typeof(PlayerAnimationState), typeof(WorldAnimationState), typeof(AnimationPlayback),
+             typeof(EnemyFlightVisualParameters), typeof(EnemyFlightVisualTiming),
+         })
 foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
     Assert(field.FieldType.Namespace != typeof(Player).Namespace || field.FieldType.Assembly != entityAssembly,
         $"Animation model field {type.Name}.{field.Name} retains a gameplay entity reference.");
-Console.WriteLine("PASS: death visibility, atomic reset behavior, and entity-reference-free animation state");
-Console.WriteLine("All Milestone 14 sprite presentation checks passed.");
+Console.WriteLine("PASS: pause freeze, reset behavior, stateless dead-enemy handling, and domain isolation");
+Console.WriteLine("All Milestone 15 sprite presentation checks passed.");
 
 static void CheckPlayerClip(
     SpriteAnimationClip clip,

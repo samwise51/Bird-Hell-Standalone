@@ -144,15 +144,24 @@ public sealed class PlayerAnimationState
 
 public sealed class WorldAnimationState
 {
-    public PlayerAnimationState Player { get; } = new();
-    public AnimationPlayback Enemy { get; } = new(BirdHellVisuals.Enemy);
+    private double _enemyVisualTime;
 
-    public void AdvanceEnemies(float deltaTime) => Enemy.Advance(deltaTime);
+    public PlayerAnimationState Player { get; } = new();
+    public double EnemyVisualTime => _enemyVisualTime;
+
+    public void AdvanceEnemies(float deltaTime)
+    {
+        if (!float.IsFinite(deltaTime) || deltaTime < 0f) throw new ArgumentOutOfRangeException(nameof(deltaTime));
+        _enemyVisualTime += deltaTime;
+    }
+
+    public SpriteFrame EnemyFrame(string runSeed, int enemyId) =>
+        BirdHellVisuals.Enemy.Frames[EnemyFlightVisualTiming.FrameIndexAt(runSeed, enemyId, _enemyVisualTime)];
 
     public void Reset(PlayerVisualSnapshot player)
     {
         Player.Reset(player);
-        Enemy.Reset();
+        _enemyVisualTime = 0d;
     }
 
     public static int ProjectileFrame(float age) => BirdHellVisuals.Projectile.GetFrameIndex(age);
@@ -162,4 +171,63 @@ public sealed class WorldAnimationState
         return desired == BirdHellVisuals.EnemyNativeFacing ? SpriteFlip.None : SpriteFlip.Horizontal;
     }
     public static SpriteFlip ProjectileFlip(float directionX) => directionX < 0f ? SpriteFlip.Horizontal : SpriteFlip.None;
+}
+
+public readonly record struct EnemyFlightVisualParameters(float PhaseOffset, float RateMultiplier);
+
+/// <summary>Pure deterministic visual timing for enemy flight; it never mutates gameplay state.</summary>
+public static class EnemyFlightVisualTiming
+{
+    public const float MinimumRateMultiplier = 0.97f;
+    public const float MaximumRateMultiplier = 1.03f;
+    private const uint PhaseSalt = 0xA511_E9B3u;
+    private const uint RateSalt = 0x63D8_35A7u;
+    private const float UnitDenominator = 16_777_216f;
+
+    public static EnemyFlightVisualParameters ForEnemy(string runSeed, int enemyId)
+    {
+        ArgumentNullException.ThrowIfNull(runSeed);
+        if (enemyId < 0) throw new ArgumentOutOfRangeException(nameof(enemyId));
+        var phaseUnit = ToUnitInterval(StableMix(runSeed, enemyId, PhaseSalt));
+        var rateUnit = ToUnitInterval(StableMix(runSeed, enemyId, RateSalt));
+        return new EnemyFlightVisualParameters(
+            phaseUnit * BirdHellVisuals.Enemy.Duration,
+            MinimumRateMultiplier + rateUnit * (MaximumRateMultiplier - MinimumRateMultiplier));
+    }
+
+    public static int FrameIndexAt(string runSeed, int enemyId, double visualTime)
+    {
+        if (!double.IsFinite(visualTime) || visualTime < 0d)
+            throw new ArgumentOutOfRangeException(nameof(visualTime));
+        var parameters = ForEnemy(runSeed, enemyId);
+        var cycleTime = (visualTime * parameters.RateMultiplier + parameters.PhaseOffset) %
+                        BirdHellVisuals.Enemy.Duration;
+        return BirdHellVisuals.Enemy.GetFrameIndex((float)cycleTime);
+    }
+
+    private static float ToUnitInterval(uint value) => (value & 0x00FF_FFFFu) / UnitDenominator;
+
+    private static uint StableMix(string runSeed, int enemyId, uint salt)
+    {
+        const uint offset = 2166136261u;
+        const uint prime = 16777619u;
+        var hash = offset;
+        foreach (var character in runSeed)
+        {
+            hash = (hash ^ (byte)character) * prime;
+            hash = (hash ^ (byte)(character >> 8)) * prime;
+        }
+        hash = (hash ^ 0xFFu) * prime;
+        var id = unchecked((uint)enemyId);
+        for (var shift = 0; shift < 32; shift += 8) hash = (hash ^ (byte)(id >> shift)) * prime;
+        hash ^= salt;
+
+        // Fixed-width avalanche; unlike GetHashCode(), this is stable across processes and runtimes.
+        hash ^= hash >> 16;
+        hash *= 0x7FEB_352Du;
+        hash ^= hash >> 15;
+        hash *= 0x846C_A68Bu;
+        hash ^= hash >> 16;
+        return hash;
+    }
 }

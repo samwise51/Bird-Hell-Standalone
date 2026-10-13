@@ -6,6 +6,7 @@ namespace BirdHell.Presentation;
 public static class BirdHellVisuals
 {
     public const string PlayerTexture = "Sprites/Player/player_explorer_runtime_v1.png";
+    public const string EnemyTexture = "Sprites/Enemy/enemy_bird_purple_flight_runtime_v1.png";
     public const string ProjectileTexture = "Sprites/Projectile/sword-attack-animation.png";
     public const string BackgroundTexture = "Sprites/Background/back.png";
     public const float PixelsPerUnit = 100f;
@@ -15,11 +16,20 @@ public static class BirdHellVisuals
     public const int PlayerCellHeight = 176;
     public const float PlayerWorldScale = 1.2f;
     public const float PlayerReferenceVisibleBodyHeightPixels = 123f;
+    public const int EnemyAtlasWidth = 512;
+    public const int EnemyAtlasHeight = 480;
+    public const int EnemyCellWidth = 128;
+    public const int EnemyCellHeight = 120;
+    public const int EnemyFlightFrameCount = 16;
+    public const float EnemyFlightFramesPerSecond = 12f;
+    public const float EnemyWorldScale = 1.3f;
+    public const float EnemyReferenceMaximumVisibleHeightPixels = 94f;
     public const SpriteTextureFilter BackgroundFilter = SpriteTextureFilter.Point;
     public const HorizontalFacing PlayerNativeFacing = HorizontalFacing.Right;
-    public const HorizontalFacing EnemyNativeFacing = HorizontalFacing.Left;
+    public const HorizontalFacing EnemyNativeFacing = HorizontalFacing.Right;
     public static readonly Vector2 PlayerBodyPivotPixels = new(96f, 88f);
     public static readonly Vector2 PlayerGroundBaselinePixels = new(96f, 160f);
+    public static readonly Vector2 EnemyBodyPivotPixels = new(80f, 72f);
     public static readonly Vector2 BackgroundLocalPosition = new(-2.66f, -5f);
     public static readonly Vector2 BackgroundWorldSize = new(38.4f, 24f);
 
@@ -37,11 +47,22 @@ public static class BirdHellVisuals
     ];
 
     public static SpriteAnimationClip Enemy { get; } = new(
-        "Eagle",
-        Enumerable.Range(1, 4).Select(index => new SpriteFrame(
-            new SpriteRegion($"Sprites/Enemy/eagle-attack-{index}.png", new PixelRectangle(0, 0, 40, 41),
-                new Vector2(0.5f), PixelsPerUnit, 3f, SpriteTextureFilter.Point),
-            1f / 12f)).ToArray(),
+        "Flight",
+        Enumerable.Range(0, EnemyFlightFrameCount).Select(index => new SpriteFrame(
+            new SpriteRegion(
+                EnemyTexture,
+                new PixelRectangle(
+                    index % 4 * EnemyCellWidth,
+                    index / 4 * EnemyCellHeight,
+                    EnemyCellWidth,
+                    EnemyCellHeight),
+                new Vector2(
+                    EnemyBodyPivotPixels.X / EnemyCellWidth,
+                    EnemyBodyPivotPixels.Y / EnemyCellHeight),
+                PixelsPerUnit,
+                EnemyWorldScale,
+                SpriteTextureFilter.Linear),
+            1f / EnemyFlightFramesPerSecond)).ToArray(),
         true);
 
     public static SpriteAnimationClip Projectile { get; } = new(
