@@ -26,87 +26,41 @@
     "columns": 9,
     "rows": 6
   },
-  "sources": [
-    {
-      "path": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
-      "sha256": "16160c15685a5c40e689a6e0ed88706177e5f23dee982524c53458ce7bd38885"
-    },
-    {
-      "path": "art/Source/Player/player_anime_explorer_addons_v1.png",
-      "sha256": "ebc14cfdba7d070faed4f96962c6630871bb5db8441e3f54b0870cad2f7d175f"
-    },
-    {
-      "path": "art/Source/Player/player_anime_explorer_attack_v1.png",
-      "sha256": "89e5065058dacf1b6967f783e3939d628a5cd9dec6f0fc530ff13e242778f407"
-    },
-    {
-      "path": "art/Source/Player/player_anime_explorer_run_v2.png",
-      "sha256": "c4dbd78e87759dfefc1a1bed760560f7c9967157ab884771c72155a6a1a09329"
-    }
-  ],
-  "normalization": {
+  "canonicalManifest": {
+    "path": "art/Source/Player/Canonical/player_canonical_manifest_v1.json",
+    "sha256": "00a5a61b1dd4e8cdcd8830d93b5f38ebff5364714958d5d9244c466f03d7971a",
+    "formatVersion": 1
+  },
+  "packing": {
+    "method": "direct copy of canonical 192x176 RGBA cells",
+    "runtimeBuilderScale": 1.0,
+    "geometricResampling": false
+  },
+  "alpha": {
     "alphaCoreThreshold": 128,
     "fringeRadiusPixels": 3,
     "minimumTransparentGutterPixels": 4,
     "pngAlphaMode": "straight",
-    "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha",
-    "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
-    "integrationStatus": "production; replacement Run row approved"
-  },
-  "replacementRun": {
-    "source": "art/Source/Player/player_anime_explorer_run_v2.png",
-    "targetRuntime": "src/BirdHell/Content/Sprites/Player/player_explorer_runtime_v1.png",
-    "frameCount": 8,
-    "frameOrder": [
-      "right contact",
-      "right recoil",
-      "right passing",
-      "right airborne",
-      "left contact",
-      "left recoil",
-      "left passing",
-      "left airborne"
+    "alphaZeroRgb": [
+      0,
+      0,
+      0
     ],
-    "nativeFacing": "right",
-    "cellWidth": 192,
-    "cellHeight": 176,
-    "stripWidth": 1536,
-    "stripHeight": 176,
-    "pivot": {
-      "x": 96,
-      "y": 88
-    },
-    "groundBaselineY": 160,
-    "runtimeScaleCorrection": 0.873,
-    "runtimeScaleReason": "visual-scale parity with Idle after host-test correction",
-    "runtimeScaleOrigin": {
-      "x": 96,
-      "y": 160
-    },
-    "runtimeScaleAlignment": "centered horizontally and bottom-aligned",
-    "fps": 12,
-    "loop": true,
-    "atlasPlacement": {
-      "row": 1,
-      "firstColumn": 0,
-      "lastColumn": 7
-    },
-    "minimumTransparentGutterPixels": 14,
-    "maximumVisibleBoundsInclusive": {
-      "left": 16,
-      "top": 16,
-      "right": 175,
-      "bottom": 161
-    },
-    "alphaMode": "straight RGBA; zero RGB at alpha 0; no matte contamination; premultiplied at runtime upload",
-    "status": "approved replacement run cycle"
+    "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha"
   },
+  "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
   "animations": {
     "Idle": {
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 0,
             "y": 0,
@@ -116,7 +70,13 @@
         },
         {
           "sourceOrderIndex": 1,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 192,
             "y": 0,
@@ -126,7 +86,13 @@
         },
         {
           "sourceOrderIndex": 2,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 384,
             "y": 0,
@@ -136,7 +102,13 @@
         },
         {
           "sourceOrderIndex": 3,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 576,
             "y": 0,
@@ -146,7 +118,13 @@
         },
         {
           "sourceOrderIndex": 4,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 768,
             "y": 0,
@@ -156,7 +134,13 @@
         },
         {
           "sourceOrderIndex": 5,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 960,
             "y": 0,
@@ -166,7 +150,13 @@
         },
         {
           "sourceOrderIndex": 6,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 1152,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 1152,
             "y": 0,
@@ -176,7 +166,13 @@
         },
         {
           "sourceOrderIndex": 7,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 1344,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 1344,
             "y": 0,
@@ -186,7 +182,13 @@
         },
         {
           "sourceOrderIndex": 8,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_idle_v1.png",
+          "canonicalCell": {
+            "x": 1536,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 1536,
             "y": 0,
@@ -195,16 +197,32 @@
           }
         }
       ],
+      "frameCount": 9,
       "fps": 7,
       "loop": true,
-      "sourceState": "approved idle row",
-      "anchor": "groundBaseline"
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_idle_v1.png",
+        "sha256": "43ce4b1527037164dea4ab6f1fcdb47375825d51c043b5113a7355b0fce72992"
+      },
+      "anchor": "groundBaseline",
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 0,
+        "firstColumn": 0,
+        "lastColumn": 8
+      }
     },
     "Run": {
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 0,
             "y": 176,
@@ -214,7 +232,13 @@
         },
         {
           "sourceOrderIndex": 1,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 192,
             "y": 176,
@@ -224,7 +248,13 @@
         },
         {
           "sourceOrderIndex": 2,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 384,
             "y": 176,
@@ -234,7 +264,13 @@
         },
         {
           "sourceOrderIndex": 3,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 576,
             "y": 176,
@@ -244,7 +280,13 @@
         },
         {
           "sourceOrderIndex": 4,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 768,
             "y": 176,
@@ -254,7 +296,13 @@
         },
         {
           "sourceOrderIndex": 5,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 960,
             "y": 176,
@@ -264,7 +312,13 @@
         },
         {
           "sourceOrderIndex": 6,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 1152,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 1152,
             "y": 176,
@@ -274,7 +328,13 @@
         },
         {
           "sourceOrderIndex": 7,
-          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "source": "art/Source/Player/Canonical/player_run_v1.png",
+          "canonicalCell": {
+            "x": 1344,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 1344,
             "y": 176,
@@ -283,18 +343,32 @@
           }
         }
       ],
+      "frameCount": 8,
       "fps": 12,
       "loop": true,
-      "sourceState": "approved replacement run cycle",
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_run_v1.png",
+        "sha256": "7bd4cdbc39b01b250aef0527fa79df2fcf35fa267671f0861194e6efd7cbf0bf"
+      },
       "anchor": "groundBaseline",
-      "status": "approved replacement run cycle",
-      "nativeFacing": "right"
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 1,
+        "firstColumn": 0,
+        "lastColumn": 7
+      }
     },
     "Jump": {
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_jump_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 0,
             "y": 352,
@@ -304,7 +378,13 @@
         },
         {
           "sourceOrderIndex": 1,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_jump_v1.png",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 192,
             "y": 352,
@@ -314,7 +394,13 @@
         },
         {
           "sourceOrderIndex": 2,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_jump_v1.png",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 384,
             "y": 352,
@@ -324,7 +410,13 @@
         },
         {
           "sourceOrderIndex": 3,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_jump_v1.png",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 576,
             "y": 352,
@@ -334,7 +426,13 @@
         },
         {
           "sourceOrderIndex": 4,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_jump_v1.png",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 768,
             "y": 352,
@@ -344,7 +442,13 @@
         },
         {
           "sourceOrderIndex": 5,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_jump_v1.png",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 960,
             "y": 352,
@@ -353,16 +457,32 @@
           }
         }
       ],
+      "frameCount": 6,
       "fps": 10,
       "loop": false,
-      "sourceState": "approved first-jump/takeoff row",
-      "anchor": "body"
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_jump_v1.png",
+        "sha256": "a2bc108f451d8885bb251e588571f4c6ea78e3ebf7c4506e288c7bd524014aba"
+      },
+      "anchor": "bodyAnchor",
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 2,
+        "firstColumn": 0,
+        "lastColumn": 5
+      }
     },
     "Airborne": {
       "frames": [
         {
-          "sourceOrderIndex": 1,
-          "source": "art/Source/Player/player_anime_explorer_addons_v1.png",
+          "sourceOrderIndex": 0,
+          "source": "art/Source/Player/Canonical/player_airborne_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 0,
             "y": 528,
@@ -371,16 +491,32 @@
           }
         }
       ],
+      "frameCount": 1,
       "fps": 0,
       "loop": true,
-      "sourceState": "dedicated center sustained-air pose",
-      "anchor": "body"
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_airborne_v1.png",
+        "sha256": "648e9377b8e0a317f64fbf4a4b0c431067c468d17a05e0d1bd2c64e67d268915"
+      },
+      "anchor": "bodyAnchor",
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 3,
+        "firstColumn": 0,
+        "lastColumn": 0
+      }
     },
     "Crouch": {
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/player_anime_explorer_addons_v1.png",
+          "source": "art/Source/Player/Canonical/player_crouch_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 192,
             "y": 528,
@@ -389,16 +525,32 @@
           }
         }
       ],
+      "frameCount": 1,
       "fps": 0,
       "loop": true,
-      "sourceState": "dedicated left crouch pose",
-      "anchor": "groundBaseline"
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_crouch_v1.png",
+        "sha256": "d8b21c74d6f1b1357173a843d8478a3b81e9047bb1698dd9b4845e211de09986"
+      },
+      "anchor": "groundBaseline",
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 3,
+        "firstColumn": 1,
+        "lastColumn": 1
+      }
     },
     "Roll": {
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_roll_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 0,
             "y": 704,
@@ -408,7 +560,13 @@
         },
         {
           "sourceOrderIndex": 1,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_roll_v1.png",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 192,
             "y": 704,
@@ -418,7 +576,13 @@
         },
         {
           "sourceOrderIndex": 2,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_roll_v1.png",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 384,
             "y": 704,
@@ -428,7 +592,13 @@
         },
         {
           "sourceOrderIndex": 3,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_roll_v1.png",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 576,
             "y": 704,
@@ -437,18 +607,36 @@
           }
         },
         {
-          "sourceOrderIndex": 2,
-          "source": "art/Source/Player/player_anime_explorer_addons_v1.png",
+          "sourceOrderIndex": 4,
+          "source": "art/Source/Player/Canonical/player_roll_v1.png",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 768,
             "y": 704,
             "width": 192,
             "height": 176
+          },
+          "status": "provisional",
+          "provenance": {
+            "manifest": "art/Source/Player/Canonical/player_canonical_manifest_v1.json",
+            "animation": "Roll",
+            "frameIndex": 4
           }
         },
         {
           "sourceOrderIndex": 5,
-          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "source": "art/Source/Player/Canonical/player_roll_v1.png",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 960,
             "y": 704,
@@ -457,16 +645,33 @@
           }
         }
       ],
+      "frameCount": 6,
       "fps": 12,
       "loop": false,
-      "sourceState": "five valid original roll frames plus rightmost sword-free addon replacement",
-      "anchor": "body"
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_roll_v1.png",
+        "sha256": "18426f10b476cb7d6709d90622244ff95a26b4bea7113d68607292162d431f74"
+      },
+      "anchor": "bodyAnchor",
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 4,
+        "firstColumn": 0,
+        "lastColumn": 5
+      },
+      "status": "provisional; frame 4 requires host approval"
     },
     "Attack": {
       "frames": [
         {
           "sourceOrderIndex": 0,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 0,
             "y": 880,
@@ -476,7 +681,13 @@
         },
         {
           "sourceOrderIndex": 1,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 192,
             "y": 880,
@@ -486,7 +697,13 @@
         },
         {
           "sourceOrderIndex": 2,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 384,
             "y": 880,
@@ -496,7 +713,13 @@
         },
         {
           "sourceOrderIndex": 3,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 576,
             "y": 880,
@@ -506,7 +729,13 @@
         },
         {
           "sourceOrderIndex": 4,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 768,
             "y": 880,
@@ -516,7 +745,13 @@
         },
         {
           "sourceOrderIndex": 5,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 960,
             "y": 880,
@@ -526,7 +761,13 @@
         },
         {
           "sourceOrderIndex": 6,
-          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "source": "art/Source/Player/Canonical/player_attack_v1.png",
+          "canonicalCell": {
+            "x": 1152,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
           "rectangle": {
             "x": 1152,
             "y": 880,
@@ -535,10 +776,20 @@
           }
         }
       ],
+      "frameCount": 7,
       "fps": 14,
       "loop": false,
-      "sourceState": "seven isolated poses from regenerated attack source",
-      "anchor": "groundBaseline"
+      "canonicalSource": {
+        "path": "art/Source/Player/Canonical/player_attack_v1.png",
+        "sha256": "7cc287974fda00ea08e4b2b439fe57f012b256793899b8f1f01731bb9fe4c1ca"
+      },
+      "anchor": "groundBaseline",
+      "nativeFacing": "right",
+      "atlasPlacement": {
+        "row": 5,
+        "firstColumn": 0,
+        "lastColumn": 6
+      }
     }
   }
 }

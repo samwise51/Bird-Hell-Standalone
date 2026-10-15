@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import statistics
 import sys
 from pathlib import Path
 
@@ -30,26 +29,27 @@ PIVOT_Y = 72
 COLUMNS = 4
 ROWS = 4
 
-PLAYER_MAIN = ROOT / "art/Source/Player/anime_cave_explorer_sprite_sheet.png"
-PLAYER_ADDONS = ROOT / "art/Source/Player/player_anime_explorer_addons_v1.png"
-PLAYER_ATTACK = ROOT / "art/Source/Player/player_anime_explorer_attack_v1.png"
+PLAYER_CANONICAL_DIR = ROOT / "art/Source/Player/Canonical"
+PLAYER_CANONICAL_MANIFEST = PLAYER_CANONICAL_DIR / "player_canonical_manifest_v1.json"
 PLAYER_OUTPUT = ROOT / "src/BirdHell/Content/Sprites/Player/player_explorer_runtime_v1.png"
 PLAYER_MANIFEST = PLAYER_OUTPUT.with_suffix(".json")
-PLAYER_SOURCE_HASHES = {
-    PLAYER_MAIN: "16160c15685a5c40e689a6e0ed88706177e5f23dee982524c53458ce7bd38885",
-    PLAYER_ADDONS: "ebc14cfdba7d070faed4f96962c6630871bb5db8441e3f54b0870cad2f7d175f",
-    PLAYER_ATTACK: "89e5065058dacf1b6967f783e3939d628a5cd9dec6f0fc530ff13e242778f407",
-}
 PLAYER_CELL_WIDTH = 192
 PLAYER_CELL_HEIGHT = 176
 PLAYER_PIVOT_X = 96
 PLAYER_PIVOT_Y = 88
 PLAYER_GROUND_BASELINE = 160
-PLAYER_RUN_SCALE_CORRECTION = 0.873
 PLAYER_COLUMNS = 9
 PLAYER_ROWS = 6
 PLAYER_MIN_GUTTER = 4
-PLAYER_REPLACEMENT_RUN_SOURCE = ROOT / "art/Source/Player/player_anime_explorer_run_v2.png"
+PLAYER_ANIMATIONS = {
+    "Idle": ("player_idle_v1.png", 9, 0, 0, 7, True),
+    "Run": ("player_run_v1.png", 8, 1, 0, 12, True),
+    "Jump": ("player_jump_v1.png", 6, 2, 0, 10, False),
+    "Airborne": ("player_airborne_v1.png", 1, 3, 0, 0, True),
+    "Crouch": ("player_crouch_v1.png", 1, 3, 1, 0, True),
+    "Roll": ("player_roll_v1.png", 6, 4, 0, 12, False),
+    "Attack": ("player_attack_v1.png", 7, 5, 0, 14, False),
+}
 
 
 def alpha_components(width: int, height: int, pixels: bytearray) -> list[list[int]]:
@@ -214,45 +214,6 @@ def render_cell(
     return cell
 
 
-def player_anchor(
-    components: list[list[int]], width: int, pixels: bytearray, grounded: bool
-) -> tuple[float, float]:
-    if grounded:
-        core = [index for component in components for index in component]
-        bottom = max(index // width for index in core)
-        body_x = []
-        for index in core:
-            red, green, blue, _ = rgba_at(pixels, width, index % width, index // width)
-            if blue > 120 and blue > red * 1.25 and blue > green * 1.05:
-                continue
-            body_x.append(index % width)
-        return float(statistics.median(body_x)), float(bottom)
-    body = max(components, key=len)
-    return (
-        float(statistics.median(index % width for index in body)),
-        float(statistics.median(index // width for index in body)),
-    )
-
-
-def render_player_cell(
-    source_width: int,
-    source_height: int,
-    frame: bytearray,
-    source_anchor: tuple[float, float],
-    scale: float,
-    grounded: bool,
-) -> bytearray:
-    target_y = PLAYER_GROUND_BASELINE if grounded else PLAYER_PIVOT_Y
-    cell = bytearray(PLAYER_CELL_WIDTH * PLAYER_CELL_HEIGHT * 4)
-    for y in range(PLAYER_CELL_HEIGHT):
-        source_y = source_anchor[1] + ((y + 0.5) - target_y) / scale
-        for x in range(PLAYER_CELL_WIDTH):
-            source_x = source_anchor[0] + ((x + 0.5) - PLAYER_PIVOT_X) / scale
-            set_rgba(cell, PLAYER_CELL_WIDTH, x, y,
-                     premultiplied_sample(frame, source_width, source_height, source_x, source_y))
-    return cell
-
-
 def paste_cell(
     atlas: bytearray,
     atlas_width: int,
@@ -278,105 +239,6 @@ def extract_cell(
         cell[target_start:target_start + cell_width * 4] = strip[
             source_start:source_start + cell_width * 4]
     return cell
-
-
-def replacement_run_cells(width: int, height: int, strip: bytearray) -> list[bytearray]:
-    expected_dimensions = (PLAYER_CELL_WIDTH * 8, PLAYER_CELL_HEIGHT)
-    if (width, height) != expected_dimensions:
-        raise RuntimeError(
-            f"Replacement Run strip is {width}x{height}; "
-            f"expected {expected_dimensions[0]}x{expected_dimensions[1]}")
-
-    cells: list[bytearray] = []
-    core_sizes: list[int] = []
-    core_bottoms: list[int] = []
-    for frame_index in range(8):
-        cell = extract_cell(
-            strip, width, frame_index * PLAYER_CELL_WIDTH,
-            PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT)
-        occupied: list[tuple[int, int]] = []
-        core: list[int] = []
-        for index in range(PLAYER_CELL_WIDTH * PLAYER_CELL_HEIGHT):
-            y, x = divmod(index, PLAYER_CELL_WIDTH)
-            red, green, blue, alpha = rgba_at(cell, PLAYER_CELL_WIDTH, x, y)
-            if alpha == 0 and (red, green, blue) != (0, 0, 0):
-                raise RuntimeError(
-                    f"Replacement Run frame {frame_index} has RGB in a transparent pixel at ({x}, {y})")
-            if alpha:
-                occupied.append((x, y))
-            if alpha >= ALPHA_CORE:
-                core.append(index)
-        if not occupied or not core:
-            raise RuntimeError(f"Replacement Run frame {frame_index} is empty")
-        min_x, max_x = min(x for x, _ in occupied), max(x for x, _ in occupied)
-        min_y, max_y = min(y for _, y in occupied), max(y for _, y in occupied)
-        if not (16 <= min_x <= max_x <= 175 and 16 <= min_y <= max_y <= 161):
-            raise RuntimeError(
-                f"Replacement Run frame {frame_index} visible bounds "
-                f"({min_x}, {min_y})..({max_x}, {max_y}) exceed the approved envelope")
-        margins = (min_x, PLAYER_CELL_WIDTH - 1 - max_x,
-                   min_y, PLAYER_CELL_HEIGHT - 1 - max_y)
-        if min(margins) < 14:
-            raise RuntimeError(
-                f"Replacement Run frame {frame_index} has only {min(margins)}px transparent gutter")
-        core_sizes.append(len(core))
-        core_bottoms.append(max(index // PLAYER_CELL_WIDTH for index in core))
-
-        cleaned = cleaned_components(
-            PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT, cell, [core])
-        scaled = render_player_cell(
-            PLAYER_CELL_WIDTH,
-            PLAYER_CELL_HEIGHT,
-            cleaned,
-            (float(PLAYER_PIVOT_X), float(PLAYER_GROUND_BASELINE)),
-            PLAYER_RUN_SCALE_CORRECTION,
-            True,
-        )
-
-        # Bilinear sampling can create a one-pixel fringe outside the geometric
-        # projection. Keep the runtime envelope centered on x=96 and aligned to
-        # y=160, then normalize the newly sampled edge colors.
-        scaled_bounds = (
-            round(PLAYER_PIVOT_X + (min_x - PLAYER_PIVOT_X) * PLAYER_RUN_SCALE_CORRECTION),
-            round(PLAYER_GROUND_BASELINE
-                  + (min_y - PLAYER_GROUND_BASELINE) * PLAYER_RUN_SCALE_CORRECTION),
-            round(PLAYER_PIVOT_X + (max_x - PLAYER_PIVOT_X) * PLAYER_RUN_SCALE_CORRECTION),
-            round(PLAYER_GROUND_BASELINE
-                  + (max_y - PLAYER_GROUND_BASELINE) * PLAYER_RUN_SCALE_CORRECTION),
-        )
-        if not (16 <= scaled_bounds[0] <= scaled_bounds[2] <= 175
-                and 16 <= scaled_bounds[1] <= scaled_bounds[3] <= 161):
-            raise RuntimeError(
-                f"Scaled replacement Run frame {frame_index} bounds {scaled_bounds} "
-                "exceed the approved envelope")
-        scaled_margins = (
-            scaled_bounds[0], PLAYER_CELL_WIDTH - 1 - scaled_bounds[2],
-            scaled_bounds[1], PLAYER_CELL_HEIGHT - 1 - scaled_bounds[3],
-        )
-        if min(scaled_margins) < 14:
-            raise RuntimeError(
-                f"Scaled replacement Run frame {frame_index} has only "
-                f"{min(scaled_margins)}px transparent gutter")
-        for y in range(PLAYER_CELL_HEIGHT):
-            for x in range(PLAYER_CELL_WIDTH):
-                if not (scaled_bounds[0] <= x <= scaled_bounds[2]
-                        and scaled_bounds[1] <= y <= scaled_bounds[3]):
-                    set_rgba(scaled, PLAYER_CELL_WIDTH, x, y, (0, 0, 0, 0))
-        scaled_core = [
-            index for index in range(PLAYER_CELL_WIDTH * PLAYER_CELL_HEIGHT)
-            if scaled[index * 4 + 3] >= ALPHA_CORE
-        ]
-        if not scaled_core:
-            raise RuntimeError(f"Scaled replacement Run frame {frame_index} is empty")
-        cells.append(cleaned_components(
-            PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT, scaled, [scaled_core]))
-
-    if max(core_sizes) / min(core_sizes) > 1.12:
-        raise RuntimeError(f"Replacement Run character scale varies excessively: {core_sizes}")
-    if core_bottoms[0] != PLAYER_GROUND_BASELINE or core_bottoms[4] != PLAYER_GROUND_BASELINE:
-        raise RuntimeError(
-            f"Replacement Run contact frames do not meet baseline {PLAYER_GROUND_BASELINE}: {core_bottoms}")
-    return cells
 
 
 def build_bird() -> None:
@@ -433,128 +295,109 @@ def build_bird() -> None:
 
 
 def build_player() -> None:
-    loaded: dict[Path, tuple[int, int, bytearray]] = {}
-    hashes: dict[Path, str] = {}
-    for path, expected_hash in PLAYER_SOURCE_HASHES.items():
-        actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
-        if actual_hash != expected_hash:
-            raise RuntimeError(f"Unexpected player source hash for {path.name}: {actual_hash}")
-        hashes[path] = actual_hash
-        loaded[path] = read_rgba_png(path)
+    canonical_manifest_hash = hashlib.sha256(PLAYER_CANONICAL_MANIFEST.read_bytes()).hexdigest()
+    canonical_manifest = json.loads(PLAYER_CANONICAL_MANIFEST.read_text(encoding="utf-8"))
+    if canonical_manifest.get("canonicalFormatVersion") != 1:
+        raise RuntimeError("Unsupported canonical player manifest format")
+    if canonical_manifest.get("cellSize") != {
+            "width": PLAYER_CELL_WIDTH, "height": PLAYER_CELL_HEIGHT}:
+        raise RuntimeError("Canonical player manifest has the wrong cell size")
+    if (canonical_manifest.get("nativeFacing") != "right"
+            or canonical_manifest.get("xOrigin") != PLAYER_PIVOT_X
+            or canonical_manifest.get("futureBuilderScale") != 1.0):
+        raise RuntimeError("Canonical player manifest has an incompatible runtime contract")
+    alpha_contract = canonical_manifest.get("alphaContract", {})
+    if (alpha_contract.get("mode") != "straight RGBA"
+            or alpha_contract.get("alphaZeroRgb") != [0, 0, 0]):
+        raise RuntimeError("Canonical player manifest has an incompatible alpha contract")
+    canonical_animations = canonical_manifest.get("animations", {})
+    if set(canonical_animations) != set(PLAYER_ANIMATIONS):
+        raise RuntimeError("Canonical player manifest has an unexpected animation set")
 
-    replacement_run: tuple[int, int, bytearray] | None = None
-    replacement_cells: list[bytearray] | None = None
-    if PLAYER_REPLACEMENT_RUN_SOURCE.exists():
-        replacement_run = read_rgba_png(PLAYER_REPLACEMENT_RUN_SOURCE)
-        replacement_cells = replacement_run_cells(*replacement_run)
-        hashes[PLAYER_REPLACEMENT_RUN_SOURCE] = hashlib.sha256(
-            PLAYER_REPLACEMENT_RUN_SOURCE.read_bytes()).hexdigest()
-
-    main_width, main_height, main_pixels = loaded[PLAYER_MAIN]
-    main_components = substantial_components(main_width, main_height, main_pixels, 5_000)
-    bounded = [(component, component_bounds(component, main_width)) for component in main_components]
-    idle = sorted([item[0] for item in bounded if item[1][1] < 280 and item[1][3] <= 270],
-                  key=lambda item: component_bounds(item, main_width)[0])
-    run = sorted([item[0] for item in bounded if 280 <= item[1][1] < 508 and item[1][3] <= 507],
-                 key=lambda item: component_bounds(item, main_width)[0])
-    jump = sorted([item[0] for item in bounded if 508 <= item[1][1] < 700 and item[1][3] <= 730],
-                  key=lambda item: component_bounds(item, main_width)[0])
-    roll_parts = sorted([item[0] for item in bounded if 700 <= item[1][1] and item[1][3] <= 901],
-                        key=lambda item: component_bounds(item, main_width)[0])
-    if (len(idle), len(run), len(jump), len(roll_parts)) != (9, 8, 6, 7):
-        raise RuntimeError(
-            f"Unexpected main-sheet groups: idle={len(idle)}, run={len(run)}, "
-            f"jump={len(jump)}, roll parts={len(roll_parts)}")
-    original_roll = [[roll_parts[0]], [roll_parts[1]], [roll_parts[2]],
-                     [roll_parts[3], roll_parts[4]], [roll_parts[6]]]
-
-    addon_width, addon_height, addon_pixels = loaded[PLAYER_ADDONS]
-    addons = sorted(substantial_components(addon_width, addon_height, addon_pixels, 10_000),
-                    key=lambda item: component_bounds(item, addon_width)[0])
-    if len(addons) != 3:
-        raise RuntimeError(f"Expected crouch, airborne, and roll addon poses; found {len(addons)}")
-    crouch, airborne, roll_replacement = addons
-
-    attack_width, attack_height, attack_pixels = loaded[PLAYER_ATTACK]
-    attack = sorted(substantial_components(attack_width, attack_height, attack_pixels, 5_000),
-                    key=lambda item: component_bounds(item, attack_width)[0])
-    if len(attack) != 7:
-        raise RuntimeError(f"Expected seven isolated attack frames, found {len(attack)}")
-
-    sources = {
-        "main": (PLAYER_MAIN, main_width, main_height, main_pixels),
-        "addons": (PLAYER_ADDONS, addon_width, addon_height, addon_pixels),
-        "attack": (PLAYER_ATTACK, attack_width, attack_height, attack_pixels),
-    }
-    specs = {
-        "Idle": [("main", [component], 0.50, True, index) for index, component in enumerate(idle)],
-        "Run": [("main", [component], 0.50, True, index) for index, component in enumerate(run)],
-        "Jump": [("main", [component], 0.50, False, index) for index, component in enumerate(jump)],
-        "Airborne": [("addons", [airborne], 0.23, False, 1)],
-        "Crouch": [("addons", [crouch], 0.25, True, 0)],
-        "Roll": [
-            ("main", original_roll[0], 0.50, False, 0),
-            ("main", original_roll[1], 0.50, False, 1),
-            ("main", original_roll[2], 0.50, False, 2),
-            ("main", original_roll[3], 0.50, False, 3),
-            ("addons", [roll_replacement], 0.25, False, 2),
-            ("main", original_roll[4], 0.50, False, 5),
-        ],
-        "Attack": [("attack", [component], 0.29, True, index) for index, component in enumerate(attack)],
-    }
-    layout = {"Idle": (0, 0), "Run": (1, 0), "Jump": (2, 0),
-              "Airborne": (3, 0), "Crouch": (3, 1), "Roll": (4, 0), "Attack": (5, 0)}
-    timing = {
-        "Idle": (7, True), "Run": (12, True), "Jump": (10, False),
-        "Airborne": (0, True), "Crouch": (0, True), "Roll": (12, False), "Attack": (14, False),
-    }
-    source_states = {
-        "Idle": "approved idle row",
-        "Run": ("approved replacement run cycle" if replacement_run else
-                "rejected Milestone 13 source material; retained in atlas only and not used by production"),
-        "Jump": "approved first-jump/takeoff row",
-        "Airborne": "dedicated center sustained-air pose", "Crouch": "dedicated left crouch pose",
-        "Roll": "five valid original roll frames plus rightmost sword-free addon replacement",
-        "Attack": "seven isolated poses from regenerated attack source",
-    }
+    loaded: dict[str, tuple[Path, str, bytearray, dict[str, object]]] = {}
+    for animation, (filename, count, _row, _column, _fps, _loop) in PLAYER_ANIMATIONS.items():
+        entry = canonical_animations[animation]
+        expected_dimensions = (PLAYER_CELL_WIDTH * count, PLAYER_CELL_HEIGHT)
+        if (entry.get("file") != filename
+                or entry.get("frameCount") != count
+                or entry.get("cellSize") != {
+                    "width": PLAYER_CELL_WIDTH, "height": PLAYER_CELL_HEIGHT}
+                or entry.get("stripDimensions") != {
+                    "width": expected_dimensions[0], "height": expected_dimensions[1]}
+                or entry.get("futureBuilderScale") != 1.0
+                or entry.get("runtimeScaleRequired") is not False):
+            raise RuntimeError(f"Canonical {animation} manifest contract is invalid")
+        source_path = PLAYER_CANONICAL_DIR / filename
+        source_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+        if source_hash != entry.get("sha256"):
+            raise RuntimeError(f"Canonical {animation} source hash differs from its manifest")
+        width, height, pixels = read_rgba_png(source_path)
+        if (width, height) != expected_dimensions:
+            raise RuntimeError(
+                f"Canonical {animation} strip is {width}x{height}; "
+                f"expected {expected_dimensions[0]}x{expected_dimensions[1]}")
+        for index in range(width * height):
+            red, green, blue, alpha = rgba_at(pixels, width, index % width, index // width)
+            if alpha == 0 and (red, green, blue) != (0, 0, 0):
+                raise RuntimeError(
+                    f"Canonical {animation} has RGB in a transparent pixel at "
+                    f"({index % width}, {index // width})")
+        loaded[animation] = (source_path, source_hash, pixels, entry)
 
     atlas_width = PLAYER_CELL_WIDTH * PLAYER_COLUMNS
     atlas_height = PLAYER_CELL_HEIGHT * PLAYER_ROWS
     atlas = bytearray(atlas_width * atlas_height * 4)
     animations: dict[str, dict[str, object]] = {}
-    for animation, frame_specs in specs.items():
-        row, first_column = layout[animation]
+    for animation, (_filename, count, row, first_column, fps, loop) in PLAYER_ANIMATIONS.items():
+        source_path, source_hash, strip, canonical_entry = loaded[animation]
         frames = []
-        for frame_index, (source_key, components, scale, grounded, source_index) in enumerate(frame_specs):
-            if animation == "Run" and replacement_cells:
-                source_path = PLAYER_REPLACEMENT_RUN_SOURCE
-                cell = replacement_cells[frame_index]
-                source_index = frame_index
-            else:
-                source_path, width, height, pixels = sources[source_key]
-                cleaned = cleaned_components(width, height, pixels, components)
-                anchor = player_anchor(components, width, pixels, grounded)
-                cell = render_player_cell(width, height, cleaned, anchor, scale, grounded)
+        canonical_frames = canonical_entry.get("frames", [])
+        if len(canonical_frames) != count:
+            raise RuntimeError(f"Canonical {animation} frame provenance count is invalid")
+        for frame_index in range(count):
+            cell = extract_cell(
+                strip, PLAYER_CELL_WIDTH * count, frame_index * PLAYER_CELL_WIDTH,
+                PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT)
             column = first_column + frame_index
             left, top = column * PLAYER_CELL_WIDTH, row * PLAYER_CELL_HEIGHT
             paste_cell(atlas, atlas_width, cell, PLAYER_CELL_WIDTH, PLAYER_CELL_HEIGHT, left, top)
-            frames.append({
-                "sourceOrderIndex": source_index,
+            frame = {
+                "sourceOrderIndex": frame_index,
                 "source": str(source_path.relative_to(ROOT)),
+                "canonicalCell": {
+                    "x": frame_index * PLAYER_CELL_WIDTH, "y": 0,
+                    "width": PLAYER_CELL_WIDTH, "height": PLAYER_CELL_HEIGHT,
+                },
                 "rectangle": {"x": left, "y": top,
                               "width": PLAYER_CELL_WIDTH, "height": PLAYER_CELL_HEIGHT},
-            })
-        fps, loop = timing[animation]
+            }
+            canonical_frame = canonical_frames[frame_index]
+            if canonical_frame.get("status") == "provisional":
+                frame["status"] = "provisional"
+                frame["provenance"] = {
+                    "manifest": str(PLAYER_CANONICAL_MANIFEST.relative_to(ROOT)),
+                    "animation": animation,
+                    "frameIndex": frame_index,
+                }
+            frames.append(frame)
         animations[animation] = {
             "frames": frames,
+            "frameCount": count,
             "fps": fps,
             "loop": loop,
-            "sourceState": source_states[animation],
-            "anchor": "groundBaseline" if frame_specs[0][3] else "body",
+            "canonicalSource": {
+                "path": str(source_path.relative_to(ROOT)),
+                "sha256": source_hash,
+            },
+            "anchor": canonical_entry["anchorType"],
+            "nativeFacing": "right",
+            "atlasPlacement": {
+                "row": row, "firstColumn": first_column,
+                "lastColumn": first_column + count - 1,
+            },
         }
-        if animation == "Run" and replacement_run:
-            animations[animation]["status"] = "approved replacement run cycle"
-            animations[animation]["nativeFacing"] = "right"
+        if animation == "Roll":
+            animations[animation]["status"] = "provisional; frame 4 requires host approval"
 
     write_rgba_png(PLAYER_OUTPUT, atlas_width, atlas_height, atlas)
     manifest = {
@@ -571,46 +414,25 @@ def build_player() -> None:
         },
         "atlas": {"width": atlas_width, "height": atlas_height,
                   "columns": PLAYER_COLUMNS, "rows": PLAYER_ROWS},
-        "sources": [{"path": str(path.relative_to(ROOT)), "sha256": hashes[path]}
-                    for path in (PLAYER_MAIN, PLAYER_ADDONS, PLAYER_ATTACK,
-                                 *([PLAYER_REPLACEMENT_RUN_SOURCE] if replacement_run else []))],
-        "normalization": {
+        "canonicalManifest": {
+            "path": str(PLAYER_CANONICAL_MANIFEST.relative_to(ROOT)),
+            "sha256": canonical_manifest_hash,
+            "formatVersion": canonical_manifest["canonicalFormatVersion"],
+        },
+        "packing": {
+            "method": "direct copy of canonical 192x176 RGBA cells",
+            "runtimeBuilderScale": 1.0,
+            "geometricResampling": False,
+        },
+        "alpha": {
             "alphaCoreThreshold": ALPHA_CORE,
             "fringeRadiusPixels": FRINGE_RADIUS,
             "minimumTransparentGutterPixels": PLAYER_MIN_GUTTER,
             "pngAlphaMode": "straight",
+            "alphaZeroRgb": [0, 0, 0],
             "runtimeUploadAlphaMode": "premultiply with DefaultColorProcessors.PremultiplyAlpha",
-            "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
-            "integrationStatus": ("production; replacement Run row approved" if replacement_run else
-                                  "production; rejected Run row isolated behind stable Idle-frame fallback"),
         },
-        "replacementRun": {
-            "source": str(PLAYER_REPLACEMENT_RUN_SOURCE.relative_to(ROOT)),
-            "targetRuntime": str(PLAYER_OUTPUT.relative_to(ROOT)),
-            "frameCount": 8,
-            "frameOrder": [
-                "right contact", "right recoil", "right passing", "right airborne",
-                "left contact", "left recoil", "left passing", "left airborne",
-            ],
-            "nativeFacing": "right",
-            "cellWidth": PLAYER_CELL_WIDTH,
-            "cellHeight": PLAYER_CELL_HEIGHT,
-            "stripWidth": PLAYER_CELL_WIDTH * 8,
-            "stripHeight": PLAYER_CELL_HEIGHT,
-            "pivot": {"x": PLAYER_PIVOT_X, "y": PLAYER_PIVOT_Y},
-            "groundBaselineY": PLAYER_GROUND_BASELINE,
-            "runtimeScaleCorrection": PLAYER_RUN_SCALE_CORRECTION,
-            "runtimeScaleReason": "visual-scale parity with Idle after host-test correction",
-            "runtimeScaleOrigin": {"x": PLAYER_PIVOT_X, "y": PLAYER_GROUND_BASELINE},
-            "runtimeScaleAlignment": "centered horizontally and bottom-aligned",
-            "fps": 12,
-            "loop": True,
-            "atlasPlacement": {"row": 1, "firstColumn": 0, "lastColumn": 7},
-            "minimumTransparentGutterPixels": 14,
-            "maximumVisibleBoundsInclusive": {"left": 16, "top": 16, "right": 175, "bottom": 161},
-            "alphaMode": "straight RGBA; zero RGB at alpha 0; no matte contamination; premultiplied at runtime upload",
-            "status": "approved replacement run cycle" if replacement_run else "awaiting source strip",
-        },
+        "layout": "fixed grid; contiguous animation sequences; unused cells transparent",
         "animations": animations,
     }
     PLAYER_MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
