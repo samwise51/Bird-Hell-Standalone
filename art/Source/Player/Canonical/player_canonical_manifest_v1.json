@@ -1,0 +1,1607 @@
+{
+  "canonicalFormatVersion": 1,
+  "cellSize": {
+    "width": 192,
+    "height": 176
+  },
+  "nativeFacing": "right",
+  "xOrigin": 96,
+  "filteringAssumption": "linear",
+  "alphaContract": {
+    "mode": "straight RGBA",
+    "alphaZeroRgb": [
+      0,
+      0,
+      0
+    ],
+    "matte": "none",
+    "resampling": "premultiplied-aware bilinear; converted to straight RGBA"
+  },
+  "futureBuilderScale": 1.0,
+  "sources": [
+    {
+      "path": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+      "dimensions": [
+        1448,
+        1086
+      ],
+      "sha256": "16160c15685a5c40e689a6e0ed88706177e5f23dee982524c53458ce7bd38885"
+    },
+    {
+      "path": "art/Source/Player/player_anime_explorer_addons_v1.png",
+      "dimensions": [
+        1448,
+        1086
+      ],
+      "sha256": "ebc14cfdba7d070faed4f96962c6630871bb5db8441e3f54b0870cad2f7d175f"
+    },
+    {
+      "path": "art/Source/Player/player_anime_explorer_attack_v1.png",
+      "dimensions": [
+        2172,
+        724
+      ],
+      "sha256": "89e5065058dacf1b6967f783e3939d628a5cd9dec6f0fc530ff13e242778f407"
+    },
+    {
+      "path": "art/Source/Player/player_anime_explorer_run_v2.png",
+      "dimensions": [
+        1536,
+        176
+      ],
+      "sha256": "c4dbd78e87759dfefc1a1bed760560f7c9967157ab884771c72155a6a1a09329"
+    }
+  ],
+  "animations": {
+    "Idle": {
+      "file": "player_idle_v1.png",
+      "sha256": "43ce4b1527037164dea4ab6f1fcdb47375825d51c043b5113a7355b0fce72992",
+      "frameCount": 9,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 1728,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "groundBaseline",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": 0.5,
+      "bakedCanonicalCorrection": 0.5,
+      "frames": [
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 0,
+          "sourceBoundsExclusive": [
+            19,
+            26,
+            167,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4271,
+            "coreBoundsInclusive": [
+              51,
+              40,
+              124,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              50,
+              39,
+              126,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 1,
+          "sourceBoundsExclusive": [
+            186,
+            26,
+            326,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4374,
+            "coreBoundsInclusive": [
+              55,
+              40,
+              124,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              54,
+              39,
+              126,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 2,
+          "sourceBoundsExclusive": [
+            341,
+            24,
+            483,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4241,
+            "coreBoundsInclusive": [
+              54,
+              39,
+              124,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              53,
+              38,
+              126,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 3,
+          "sourceBoundsExclusive": [
+            500,
+            26,
+            643,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4330,
+            "coreBoundsInclusive": [
+              53,
+              40,
+              123,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              51,
+              39,
+              125,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 4,
+          "sourceBoundsExclusive": [
+            657,
+            25,
+            806,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4486,
+            "coreBoundsInclusive": [
+              51,
+              40,
+              124,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              49,
+              38,
+              126,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 5,
+          "sourceBoundsExclusive": [
+            821,
+            27,
+            965,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4374,
+            "coreBoundsInclusive": [
+              54,
+              41,
+              125,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              52,
+              39,
+              126,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 6,
+          "sourceBoundsExclusive": [
+            975,
+            27,
+            1128,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 1152,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4483,
+            "coreBoundsInclusive": [
+              51,
+              41,
+              127,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              50,
+              39,
+              128,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 7,
+          "sourceBoundsExclusive": [
+            1140,
+            25,
+            1283,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 1344,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4488,
+            "coreBoundsInclusive": [
+              56,
+              40,
+              126,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              54,
+              38,
+              128,
+              161
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 8,
+          "sourceBoundsExclusive": [
+            1293,
+            25,
+            1430,
+            266
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 1536,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4251,
+            "coreBoundsInclusive": [
+              56,
+              40,
+              123,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              54,
+              38,
+              125,
+              161
+            ]
+          }
+        }
+      ],
+      "baselineY": 160
+    },
+    "Run": {
+      "file": "player_run_v1.png",
+      "sha256": "7bd4cdbc39b01b250aef0527fa79df2fcf35fa267671f0861194e6efd7cbf0bf",
+      "frameCount": 8,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 1536,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "groundBaseline",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": 0.873,
+      "bakedCanonicalCorrection": 0.873,
+      "frames": [
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 0,
+          "sourceBoundsExclusive": [
+            0,
+            0,
+            192,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5331,
+            "coreBoundsInclusive": [
+              47,
+              43,
+              143,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              47,
+              43,
+              144,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 1,
+          "sourceBoundsExclusive": [
+            192,
+            0,
+            384,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5203,
+            "coreBoundsInclusive": [
+              53,
+              39,
+              137,
+              158
+            ],
+            "alphaBoundsInclusive": [
+              53,
+              39,
+              138,
+              158
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 2,
+          "sourceBoundsExclusive": [
+            384,
+            0,
+            576,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4941,
+            "coreBoundsInclusive": [
+              52,
+              34,
+              138,
+              157
+            ],
+            "alphaBoundsInclusive": [
+              52,
+              34,
+              140,
+              157
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 3,
+          "sourceBoundsExclusive": [
+            576,
+            0,
+            768,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5363,
+            "coreBoundsInclusive": [
+              51,
+              35,
+              139,
+              150
+            ],
+            "alphaBoundsInclusive": [
+              51,
+              35,
+              140,
+              151
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 4,
+          "sourceBoundsExclusive": [
+            768,
+            0,
+            960,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5336,
+            "coreBoundsInclusive": [
+              49,
+              40,
+              141,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              49,
+              40,
+              142,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 5,
+          "sourceBoundsExclusive": [
+            960,
+            0,
+            1152,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5088,
+            "coreBoundsInclusive": [
+              52,
+              37,
+              137,
+              158
+            ],
+            "alphaBoundsInclusive": [
+              52,
+              37,
+              139,
+              158
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 6,
+          "sourceBoundsExclusive": [
+            1152,
+            0,
+            1344,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 1152,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5046,
+            "coreBoundsInclusive": [
+              51,
+              34,
+              139,
+              157
+            ],
+            "alphaBoundsInclusive": [
+              51,
+              34,
+              140,
+              157
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_run_v2.png",
+          "sourceOrderIndex": 7,
+          "sourceBoundsExclusive": [
+            1344,
+            0,
+            1536,
+            176
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.873,
+          "effectiveScaleBaked": 0.873,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 1344,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 5389,
+            "coreBoundsInclusive": [
+              51,
+              37,
+              140,
+              151
+            ],
+            "alphaBoundsInclusive": [
+              51,
+              37,
+              140,
+              151
+            ]
+          }
+        }
+      ],
+      "baselineY": 160
+    },
+    "Jump": {
+      "file": "player_jump_v1.png",
+      "sha256": "a2bc108f451d8885bb251e588571f4c6ea78e3ebf7c4506e288c7bd524014aba",
+      "frameCount": 6,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 1152,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "bodyAnchor",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": 0.5,
+      "bakedCanonicalCorrection": 0.5,
+      "frames": [
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 0,
+          "sourceBoundsExclusive": [
+            69,
+            542,
+            260,
+            726
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4498,
+            "coreBoundsInclusive": [
+              40,
+              41,
+              134,
+              132
+            ],
+            "alphaBoundsInclusive": [
+              38,
+              40,
+              136,
+              134
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 1,
+          "sourceBoundsExclusive": [
+            293,
+            524,
+            471,
+            727
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 3844,
+            "coreBoundsInclusive": [
+              49,
+              47,
+              137,
+              147
+            ],
+            "alphaBoundsInclusive": [
+              47,
+              45,
+              138,
+              149
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 2,
+          "sourceBoundsExclusive": [
+            501,
+            511,
+            682,
+            700
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 3793,
+            "coreBoundsInclusive": [
+              44,
+              46,
+              134,
+              140
+            ],
+            "alphaBoundsInclusive": [
+              43,
+              45,
+              135,
+              141
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 3,
+          "sourceBoundsExclusive": [
+            716,
+            508,
+            884,
+            686
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4002,
+            "coreBoundsInclusive": [
+              50,
+              45,
+              133,
+              133
+            ],
+            "alphaBoundsInclusive": [
+              49,
+              43,
+              135,
+              134
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 4,
+          "sourceBoundsExclusive": [
+            911,
+            523,
+            1138,
+            728
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4261,
+            "coreBoundsInclusive": [
+              39,
+              44,
+              151,
+              146
+            ],
+            "alphaBoundsInclusive": [
+              37,
+              43,
+              153,
+              147
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 5,
+          "sourceBoundsExclusive": [
+            1122,
+            554,
+            1326,
+            729
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4861,
+            "coreBoundsInclusive": [
+              35,
+              50,
+              136,
+              136
+            ],
+            "alphaBoundsInclusive": [
+              33,
+              48,
+              137,
+              138
+            ]
+          }
+        }
+      ],
+      "bodyAnchor": {
+        "x": 96,
+        "y": 88
+      },
+      "anchorStrategy": "largest core component median aligned to (96,88), preserving approved placement"
+    },
+    "Airborne": {
+      "file": "player_airborne_v1.png",
+      "sha256": "648e9377b8e0a317f64fbf4a4b0c431067c468d17a05e0d1bd2c64e67d268915",
+      "frameCount": 1,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 192,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "bodyAnchor",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": 0.23,
+      "bakedCanonicalCorrection": 0.23,
+      "frames": [
+        {
+          "source": "art/Source/Player/player_anime_explorer_addons_v1.png",
+          "sourceOrderIndex": 1,
+          "sourceBoundsExclusive": [
+            502,
+            270,
+            922,
+            843
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.23,
+          "effectiveScaleBaked": 0.23,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 6094,
+            "coreBoundsInclusive": [
+              40,
+              39,
+              136,
+              170
+            ],
+            "alphaBoundsInclusive": [
+              39,
+              38,
+              136,
+              170
+            ]
+          }
+        }
+      ],
+      "bodyAnchor": {
+        "x": 96,
+        "y": 88
+      },
+      "anchorStrategy": "largest core component median aligned to (96,88), preserving approved placement"
+    },
+    "Crouch": {
+      "file": "player_crouch_v1.png",
+      "sha256": "d8b21c74d6f1b1357173a843d8478a3b81e9047bb1698dd9b4845e211de09986",
+      "frameCount": 1,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 192,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "groundBaseline",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": 0.25,
+      "bakedCanonicalCorrection": 0.25,
+      "frames": [
+        {
+          "source": "art/Source/Player/player_anime_explorer_addons_v1.png",
+          "sourceOrderIndex": 0,
+          "sourceBoundsExclusive": [
+            25,
+            470,
+            482,
+            840
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.25,
+          "effectiveScaleBaked": 0.25,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 6837,
+            "coreBoundsInclusive": [
+              35,
+              68,
+              148,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              34,
+              67,
+              149,
+              160
+            ]
+          }
+        }
+      ],
+      "baselineY": 160
+    },
+    "Roll": {
+      "file": "player_roll_v1.png",
+      "sha256": "18426f10b476cb7d6709d90622244ff95a26b4bea7113d68607292162d431f74",
+      "frameCount": 6,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 1152,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "bodyAnchor",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": {
+        "frames0To3And5": 0.5,
+        "frame4": 0.25
+      },
+      "bakedCanonicalCorrection": {
+        "frames0To3And5": 0.5,
+        "frame4": 0.2375,
+        "frame4OpticalCorrection": 0.95
+      },
+      "frames": [
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 0,
+          "sourceBoundsExclusive": [
+            112,
+            739,
+            301,
+            863
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 3534,
+            "coreBoundsInclusive": [
+              45,
+              58,
+              139,
+              119
+            ],
+            "alphaBoundsInclusive": [
+              44,
+              57,
+              140,
+              121
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 1,
+          "sourceBoundsExclusive": [
+            327,
+            742,
+            513,
+            883
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 3529,
+            "coreBoundsInclusive": [
+              43,
+              52,
+              135,
+              121
+            ],
+            "alphaBoundsInclusive": [
+              42,
+              50,
+              137,
+              123
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 2,
+          "sourceBoundsExclusive": [
+            528,
+            725,
+            720,
+            881
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4263,
+            "coreBoundsInclusive": [
+              45,
+              50,
+              140,
+              127
+            ],
+            "alphaBoundsInclusive": [
+              44,
+              49,
+              142,
+              129
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 3,
+          "sourceBoundsExclusive": [
+            734,
+            723,
+            932,
+            886
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4851,
+            "coreBoundsInclusive": [
+              51,
+              54,
+              149,
+              134
+            ],
+            "alphaBoundsInclusive": [
+              50,
+              52,
+              151,
+              136
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_addons_v1.png",
+          "sourceOrderIndex": 2,
+          "sourceBoundsExclusive": [
+            991,
+            390,
+            1432,
+            788
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.25,
+          "effectiveScaleBaked": 0.2375,
+          "anchor": "bodyAnchor",
+          "status": "provisional",
+          "opticalScaleCorrection": 0.95,
+          "provisionalReason": "0.95x corrects the documented ~1.05x anatomical overscale; the curled pose retains a larger envelope/core area than frames 3 and 5 and needs in-game review",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 6174,
+            "coreBoundsInclusive": [
+              43,
+              40,
+              146,
+              133
+            ],
+            "alphaBoundsInclusive": [
+              42,
+              39,
+              147,
+              134
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/anime_cave_explorer_sprite_sheet.png",
+          "sourceOrderIndex": 5,
+          "sourceBoundsExclusive": [
+            1167,
+            752,
+            1365,
+            890
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.5,
+          "effectiveScaleBaked": 0.5,
+          "anchor": "bodyAnchor",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 3501,
+            "coreBoundsInclusive": [
+              39,
+              58,
+              136,
+              126
+            ],
+            "alphaBoundsInclusive": [
+              37,
+              57,
+              138,
+              128
+            ]
+          }
+        }
+      ],
+      "bodyAnchor": {
+        "x": 96,
+        "y": 88
+      },
+      "anchorStrategy": "largest core component median aligned to (96,88), preserving approved placement"
+    },
+    "Attack": {
+      "file": "player_attack_v1.png",
+      "sha256": "7cc287974fda00ea08e4b2b439fe57f012b256793899b8f1f01731bb9fe4c1ca",
+      "frameCount": 7,
+      "cellSize": {
+        "width": 192,
+        "height": 176
+      },
+      "stripDimensions": {
+        "width": 1344,
+        "height": 176
+      },
+      "nativeFacing": "right",
+      "xOrigin": 96,
+      "anchorType": "groundBaseline",
+      "futureBuilderScale": 1.0,
+      "runtimeScaleRequired": false,
+      "oldBuilderScale": 0.29,
+      "bakedCanonicalCorrection": 0.3284,
+      "frames": [
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 0,
+          "sourceBoundsExclusive": [
+            14,
+            285,
+            326,
+            583
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 0,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4476,
+            "coreBoundsInclusive": [
+              52,
+              62,
+              153,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              50,
+              61,
+              154,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 1,
+          "sourceBoundsExclusive": [
+            337,
+            170,
+            584,
+            584
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 192,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4544,
+            "coreBoundsInclusive": [
+              58,
+              24,
+              139,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              57,
+              23,
+              140,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 2,
+          "sourceBoundsExclusive": [
+            600,
+            259,
+            934,
+            584
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 384,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 6050,
+            "coreBoundsInclusive": [
+              48,
+              53,
+              157,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              47,
+              52,
+              158,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 3,
+          "sourceBoundsExclusive": [
+            944,
+            318,
+            1232,
+            584
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 576,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4471,
+            "coreBoundsInclusive": [
+              54,
+              73,
+              147,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              52,
+              72,
+              148,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 4,
+          "sourceBoundsExclusive": [
+            1231,
+            187,
+            1489,
+            584
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 768,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4663,
+            "coreBoundsInclusive": [
+              55,
+              30,
+              139,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              54,
+              29,
+              140,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 5,
+          "sourceBoundsExclusive": [
+            1506,
+            249,
+            1891,
+            584
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 960,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 7901,
+            "coreBoundsInclusive": [
+              42,
+              50,
+              167,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              41,
+              49,
+              168,
+              160
+            ]
+          }
+        },
+        {
+          "source": "art/Source/Player/player_anime_explorer_attack_v1.png",
+          "sourceOrderIndex": 6,
+          "sourceBoundsExclusive": [
+            1891,
+            311,
+            2160,
+            583
+          ],
+          "normalizationMethod": "component isolation; premultiplied-aware bilinear resampling; straight-RGBA output",
+          "sourceScaleBaked": 0.3284,
+          "effectiveScaleBaked": 0.3284,
+          "anchor": "groundBaseline",
+          "status": "approved",
+          "canonicalCell": {
+            "x": 1152,
+            "y": 0,
+            "width": 192,
+            "height": 176
+          },
+          "metrics": {
+            "coreArea": 4446,
+            "coreBoundsInclusive": [
+              54,
+              71,
+              141,
+              159
+            ],
+            "alphaBoundsInclusive": [
+              53,
+              70,
+              142,
+              160
+            ]
+          }
+        }
+      ],
+      "baselineY": 160
+    }
+  }
+}
