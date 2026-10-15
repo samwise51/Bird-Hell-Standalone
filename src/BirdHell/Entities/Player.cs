@@ -33,6 +33,8 @@ public sealed class Player : Systems.IDamageable
     public bool IsJumping { get; internal set; }
     public Vector2 GroundNormal { get; internal set; } = Vector2.UnitY;
     public int JumpsUsed { get; internal set; }
+    public bool SecondJumpActive { get; internal set; }
+    public float SecondJumpElapsed { get; internal set; }
     public int FacingDirection { get; internal set; } = 1;
     public int MaximumHealth { get; } = DefaultMaximumHealth;
     public int Health { get; private set; } = DefaultMaximumHealth;
@@ -54,6 +56,8 @@ public sealed class Player : Systems.IDamageable
         {
             IsAlive = false;
             Velocity = Vector2.Zero;
+            SecondJumpActive = false;
+            SecondJumpElapsed = 0f;
         }
         return new Systems.DamageResult(true, killed);
     }
@@ -69,6 +73,8 @@ public sealed class Player : Systems.IDamageable
         IsJumping = false;
         GroundNormal = Vector2.UnitY;
         JumpsUsed = 0;
+        SecondJumpActive = false;
+        SecondJumpElapsed = 0f;
         FacingDirection = 1;
         Health = MaximumHealth;
         IsAlive = true;

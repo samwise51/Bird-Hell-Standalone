@@ -22,6 +22,8 @@ public sealed record PlayerMovementSettings
 
 public sealed class PlayerMovementSystem
 {
+    public const float SecondJumpDuration = 0.5f;
+
     private readonly TerrainCollisionSystem _collision;
     private readonly PlayerMovementSettings _settings;
 
@@ -40,6 +42,7 @@ public sealed class PlayerMovementSystem
         if (!player.IsAlive)
         {
             player.Velocity = Vector2.Zero;
+            ResetSecondJump(player);
             return default;
         }
 
@@ -50,6 +53,7 @@ public sealed class PlayerMovementSystem
         if (player.IsGrounded)
         {
             player.JumpsUsed = 0;
+            ResetSecondJump(player);
             if (player.Velocity.Y <= 0f) player.IsJumping = false;
         }
 
@@ -73,22 +77,52 @@ public sealed class PlayerMovementSystem
             performedJumpNumber = player.JumpsUsed;
             player.IsGrounded = false;
             player.IsJumping = true;
+            if (player.JumpsUsed == 2) BeginSecondJump(player);
         }
 
         if (!player.IsGrounded)
         {
             var multiplier = player.Velocity.Y <= 0f
                 ? _settings.FallMultiplier
-                : player.Velocity.Y > 0f && !input.JumpHeld ? _settings.LowJumpMultiplier : 1f;
+                : player.JumpsUsed >= 2
+                    ? player.SecondJumpActive ? 1f : _settings.LowJumpMultiplier
+                    : !input.JumpHeld ? _settings.LowJumpMultiplier : 1f;
             player.Velocity += new Vector2(0f, -_settings.Gravity * multiplier * deltaTime);
+            AdvanceSecondJump(player, deltaTime);
         }
 
         _collision.MoveAndCollide(player, player.Velocity * deltaTime);
-        if (player.IsGrounded && player.Velocity.Y <= 0f)
+        if (player.IsGrounded)
         {
             player.JumpsUsed = 0;
             player.IsJumping = false;
+            ResetSecondJump(player);
         }
         return new PlayerMovementStepResult(performedJump, performedJumpNumber);
+    }
+
+    private static void BeginSecondJump(Player player)
+    {
+        player.SecondJumpActive = true;
+        player.SecondJumpElapsed = 0f;
+    }
+
+    private static void AdvanceSecondJump(Player player, float deltaTime)
+    {
+        if (!player.SecondJumpActive) return;
+        var remaining = SecondJumpDuration - player.SecondJumpElapsed;
+        if (deltaTime >= remaining)
+        {
+            player.SecondJumpElapsed = SecondJumpDuration;
+            player.SecondJumpActive = false;
+            return;
+        }
+        player.SecondJumpElapsed += deltaTime;
+    }
+
+    private static void ResetSecondJump(Player player)
+    {
+        player.SecondJumpActive = false;
+        player.SecondJumpElapsed = 0f;
     }
 }

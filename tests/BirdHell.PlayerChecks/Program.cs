@@ -108,18 +108,88 @@ Assert(!falling.IsGrounded && falling.Velocity.Y > 0f && falling.JumpsUsed == 1 
        firstJumpResult.JumpPerformed && firstJumpResult.JumpNumber == 1 && !firstJumpResult.SecondJumpPerformed,
     "Grounded jump did not launch player or report jump one.");
 var firstJumpVelocity = falling.Velocity.Y;
+for (var index = 0; index < 5; index++)
+{
+    var heldFirstJumpResult = floorMovement.Step(falling, new PlayerInput(0f, false, true), step);
+    Assert(!heldFirstJumpResult.JumpPerformed && falling.JumpsUsed == 1,
+        "Holding the first jump generated a second jump without a new press edge.");
+}
+floorMovement.Step(falling, new PlayerInput(0f, false, false), step);
 var secondJumpResult = floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
 Assert(falling.JumpsUsed == 2 && secondJumpResult.SecondJumpPerformed &&
+       falling.SecondJumpActive && MathF.Abs(falling.SecondJumpElapsed - step) < 0.00001f &&
        MathF.Abs(falling.Velocity.Y - firstJumpVelocity) < 0.00001f,
-    "Original second jump availability, accepted event, or unchanged jump physics failed.");
+    "Distinct second jump press did not launch with the original speed and start its fixed timer.");
+for (var index = 1; index < 24; index++)
+    floorMovement.Step(falling, new PlayerInput(0f, false, index % 2 == 0), step);
+Assert(falling.SecondJumpActive && MathF.Abs(falling.SecondJumpElapsed - 0.48f) < 0.00001f,
+    "Second-jump timer did not advance by fixed simulation steps through 0.48 seconds.");
+floorMovement.Step(falling, new PlayerInput(0f, false, false), step);
+Assert(!falling.SecondJumpActive && falling.SecondJumpElapsed == PlayerMovementSystem.SecondJumpDuration,
+    "Second-jump timer did not end deterministically at 0.5 seconds.");
 var velocityBeforeThirdJump = falling.Velocity.Y;
 var failedThirdJumpResult = floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
 Assert(falling.JumpsUsed == 2 && falling.Velocity.Y < velocityBeforeThirdJump && !failedThirdJumpResult.JumpPerformed,
-    "Player jumped more than the original two-jump limit or reported a rejected jump as accepted.");
+    "Player jumped more than the two-jump limit or reported a rejected third jump as accepted.");
+for (var index = 0; index < 500 && !falling.IsGrounded; index++)
+    floorMovement.Step(falling, default, step);
+Assert(falling.IsGrounded && falling.JumpsUsed == 0 && !falling.SecondJumpActive && falling.SecondJumpElapsed == 0f,
+    $"Landing did not restore jump availability and clear second-jump timing state: " +
+    $"grounded={falling.IsGrounded}, jumps={falling.JumpsUsed}, active={falling.SecondJumpActive}, " +
+    $"elapsed={falling.SecondJumpElapsed}, position={falling.Position}, velocity={falling.Velocity}.");
+var afterLandingJump = floorMovement.Step(falling, new PlayerInput(0f, true, true), step);
+Assert(afterLandingJump.JumpNumber == 1 && !afterLandingJump.SecondJumpPerformed,
+    "The next grounded jump after landing was not a normal first jump.");
 var walkedOffResult = emptyMovement.Step(new Player(new Vector2(0f, 5f), collider), default, step);
 Assert(!walkedOffResult.JumpPerformed && !walkedOffResult.SecondJumpPerformed,
     "Ordinary airborne/falling movement emitted a jump event.");
-Console.WriteLine("PASS: grounded jump and original two-jump limit work");
+var dyingJumper = new Player(new Vector2(0f, 100f));
+emptyMovement.Step(dyingJumper, new PlayerInput(0f, true, true), step);
+emptyMovement.Step(dyingJumper, new PlayerInput(0f, true, true), step);
+Assert(dyingJumper.SecondJumpActive, "Death reset setup did not activate the second jump.");
+dyingJumper.TakeDamage(dyingJumper.MaximumHealth);
+Assert(!dyingJumper.SecondJumpActive && dyingJumper.SecondJumpElapsed == 0f,
+    "Player death did not clear second-jump timing state immediately.");
+Console.WriteLine("PASS: jump press edges, fixed duration, two-jump limit, landing reset, and death reset work");
+
+var firstJumpTapDiagnostic = MeasureFirstJump(1);
+var firstJumpHoldDiagnostic = MeasureFirstJump(100);
+AssertNear(firstJumpTapDiagnostic.InitialVelocity, 17.803801f,
+    "First-jump initial velocity changed from the pre-repair measurement.");
+AssertNear(firstJumpHoldDiagnostic.InitialVelocity, 17.803801f,
+    "Held first-jump initial velocity changed from the pre-repair measurement.");
+AssertNear(firstJumpTapDiagnostic.Apex, 105.564369f,
+    "First-jump tap apex changed from the pre-repair measurement.");
+AssertNear(firstJumpHoldDiagnostic.Apex, 116.334099f,
+    "First-jump hold apex changed from the pre-repair measurement.");
+Assert(firstJumpTapDiagnostic.ApexStep == 31 && firstJumpHoldDiagnostic.ApexStep == 91 &&
+       firstJumpHoldDiagnostic.Apex > firstJumpTapDiagnostic.Apex + 10f,
+    "First jump no longer preserves distinct early-release and held trajectories.");
+Console.WriteLine(
+    $"MEASURE: first jump initial velocity={firstJumpHoldDiagnostic.InitialVelocity:F6}, " +
+    $"tap apex={firstJumpTapDiagnostic.Apex:F6} at step {firstJumpTapDiagnostic.ApexStep}, " +
+    $"hold apex={firstJumpHoldDiagnostic.Apex:F6} at step {firstJumpHoldDiagnostic.ApexStep}");
+var secondJumpTrajectories = new[] { 0f, 0.10f, 0.25f, 0.50f }
+    .Select(MeasureSecondJump)
+    .ToArray();
+var maximumTrajectoryDifference = secondJumpTrajectories
+    .Skip(1)
+    .Max(trajectory => MaxTrajectoryDifference(secondJumpTrajectories[0], trajectory));
+Assert(maximumTrajectoryDifference <= 0.00001f,
+    $"Second-jump trajectory still depends on hold/release timing; max difference {maximumTrajectoryDifference}.");
+foreach (var diagnostic in secondJumpTrajectories)
+{
+    Assert(diagnostic.Active[23] && !diagnostic.Active[24] &&
+           MathF.Abs(diagnostic.Elapsed[23] - 0.48f) < 0.00001f &&
+           diagnostic.Elapsed[24] == PlayerMovementSystem.SecondJumpDuration,
+        "A second-jump hold variant did not share the exact fixed 0.5-second action duration.");
+    Console.WriteLine(
+        $"MEASURE: second jump hold={diagnostic.HoldDuration:F2}s, " +
+        $"y@0.10={diagnostic.Positions[4]:F6}, y@0.26={diagnostic.Positions[12]:F6}, " +
+        $"y@0.50={diagnostic.Positions[24]:F6}, y@1.00={diagnostic.Positions[49]:F6}, " +
+        $"vy@0.50={diagnostic.Velocities[24]:F6}, vy@1.00={diagnostic.Velocities[49]:F6}");
+}
+Console.WriteLine($"PASS: second-jump tap/hold/release trajectories match (max difference {maximumTrajectoryDifference:F6})");
 
 var wallSegments = new[]
 {
@@ -182,6 +252,61 @@ Console.WriteLine("PASS: fixed-step simulation is reasonably timestep-independen
 
 static Player StandingPlayer(float x, float floorY, PlayerCollider collider) =>
     new(new Vector2(x - collider.Offset.X, floorY - collider.BottomOffset + TerrainCollisionSystem.Skin), collider);
+
+static (float InitialVelocity, float Apex, int ApexStep) MeasureFirstJump(int holdSteps)
+{
+    var player = new Player(new Vector2(0f, 100f));
+    var movement = CreateMovement([]);
+    var apex = player.Position.Y;
+    var apexStep = 0;
+    var initialVelocity = 0f;
+    for (var index = 0; index < 200; index++)
+    {
+        movement.Step(player, new PlayerInput(0f, index == 0, index < holdSteps), step);
+        if (index == 0) initialVelocity = player.Velocity.Y;
+        if (player.Position.Y > apex)
+        {
+            apex = player.Position.Y;
+            apexStep = index + 1;
+        }
+    }
+    return (initialVelocity, apex, apexStep);
+}
+
+static (float HoldDuration, float[] Positions, float[] Velocities, bool[] Active, float[] Elapsed)
+    MeasureSecondJump(float holdDuration)
+{
+    var player = new Player(new Vector2(0f, 100f));
+    var movement = CreateMovement([]);
+    movement.Step(player, new PlayerInput(0f, true, true), step);
+    var positions = new float[50];
+    var velocities = new float[50];
+    var active = new bool[50];
+    var elapsed = new float[50];
+    for (var index = 0; index < positions.Length; index++)
+    {
+        var jumpHeld = index == 0 || index * step < holdDuration;
+        movement.Step(player, new PlayerInput(0f, index == 0, jumpHeld), step);
+        positions[index] = player.Position.Y;
+        velocities[index] = player.Velocity.Y;
+        active[index] = player.SecondJumpActive;
+        elapsed[index] = player.SecondJumpElapsed;
+    }
+    return (holdDuration, positions, velocities, active, elapsed);
+}
+
+static float MaxTrajectoryDifference(
+    (float HoldDuration, float[] Positions, float[] Velocities, bool[] Active, float[] Elapsed) first,
+    (float HoldDuration, float[] Positions, float[] Velocities, bool[] Active, float[] Elapsed) second)
+{
+    var maximum = 0f;
+    for (var index = 0; index < first.Positions.Length; index++)
+    {
+        maximum = MathF.Max(maximum, MathF.Abs(first.Positions[index] - second.Positions[index]));
+        maximum = MathF.Max(maximum, MathF.Abs(first.Velocities[index] - second.Velocities[index]));
+    }
+    return maximum;
+}
 
 static Player SimulateAirborne(float deltaTime, int count)
 {
@@ -248,4 +373,10 @@ static void OpenRectangle(CaveTile[,] tiles, int minX, int maxX, int minY, int m
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
+}
+
+static void AssertNear(float actual, float expected, string message)
+{
+    if (MathF.Abs(actual - expected) > 0.0001f)
+        throw new InvalidOperationException($"{message} Expected {expected}, got {actual}.");
 }

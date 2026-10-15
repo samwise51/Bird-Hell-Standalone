@@ -6,6 +6,7 @@ KeyboardMovementRemainsDigital();
 KeyboardAndMouseActionsRemainMapped();
 StickDeadZoneAndAnalogMovementWork();
 ControllerAControlsJumpOnly();
+JumpPressRequiresReleaseAndRepress();
 TriggerUsesCrossingAndHysteresis();
 DevicesCollapseIntoLogicalActions();
 PressedEdgesRemainBufferedUntilOneSimulationStep();
@@ -65,6 +66,22 @@ static void ControllerAControlsJumpOnly()
     input.UpdateFrame(default, default, [Pad(buttons: Buttons.A)]);
     var held = input.ConsumeSimulationStep();
     Assert(!held.JumpPressed && held.JumpHeld, "Holding controller A repeated its edge or lost JumpHeld.");
+}
+
+static void JumpPressRequiresReleaseAndRepress()
+{
+    var input = Initialized();
+    input.UpdateFrame(Keyboard(Keys.Space), default, []);
+    Assert(input.ConsumeSimulationStep().JumpPressed, "Initial physical jump press did not emit an edge.");
+    input.UpdateFrame(Keyboard(Keys.Space), default, []);
+    var held = input.ConsumeSimulationStep();
+    Assert(!held.JumpPressed && held.JumpHeld,
+        "Continuously holding the first jump emitted an edge that could consume the second jump.");
+    input.UpdateFrame(default, default, []);
+    Assert(!input.ConsumeSimulationStep().JumpPressed, "Jump release emitted a press edge.");
+    input.UpdateFrame(Keyboard(Keys.Space), default, []);
+    Assert(input.ConsumeSimulationStep().JumpPressed,
+        "A distinct release and repress did not emit the edge needed for the second jump.");
 }
 
 static void TriggerUsesCrossingAndHysteresis()

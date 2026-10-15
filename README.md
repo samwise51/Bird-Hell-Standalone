@@ -48,7 +48,7 @@ legacy row-major tie-break remain unchanged; synchronized 0.5-second bird repath
 ## Controls
 
 - `A` / `D`, Left / Right, or controller left stick: move
-- `SPACE` or controller A: jump (the original controller allows one air jump)
+- `SPACE` or controller A: variable-height first jump, then a fixed 0.5-second aerial boost shown as a Roll
 - `S` or Down: crouch animation only (movement, physics, and collider are unchanged)
 - Left mouse button, Left Ctrl, or controller right trigger: fire once per press/pull in the direction the player faces
 - `R`: start a fresh run with a new cave seed while gameplay is active

@@ -173,6 +173,9 @@ run.Player.Position += new Vector2(1f, 2f);
 run.Player.Velocity = new Vector2(-7f, 5f);
 run.Player.TakeDamage(25);
 run.PlayerMovement.Step(run.Player, new PlayerInput(-1f, true, true), step);
+run.PlayerMovement.Step(run.Player, new PlayerInput(-1f, false, false), step);
+run.PlayerMovement.Step(run.Player, new PlayerInput(-1f, true, true), step);
+Assert(run.Player.SecondJumpActive, "Lifecycle reset setup did not activate the second jump.");
 dirtyEnemy.Velocity = new Vector2(5f, 6f);
 dirtyEnemy.Path = [new Vector2(99f, 99f)];
 dirtyEnemy.PathIndex = 1;
@@ -205,6 +208,7 @@ Assert(run.EnemySpawn.Placements.SequenceEqual(enemySpawnBeforeReset.Placements)
 Assert(!ReferenceEquals(run.Player, oldPlayer) && run.Player.Health == 100 && run.Player.IsAlive,
     "Atomic reset retained the old player or failed to restore it.");
 Assert(run.Player.Velocity == Vector2.Zero && run.Player.FacingDirection == 1 && !run.Player.IsJumping && run.Player.JumpsUsed == 0 &&
+       !run.Player.SecondJumpActive && run.Player.SecondJumpElapsed == 0f &&
        run.Player.DamageFlashTime == 0f,
     "Atomic reset retained player movement/jump/facing/feedback transients.");
 Assert(run.Enemies.LivingCount == 15 && run.Enemies.Enemies.All(enemy => !oldEnemies.Contains(enemy)),

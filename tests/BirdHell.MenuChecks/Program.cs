@@ -132,6 +132,10 @@ static void PausedRunIsFrozenAndPreserved()
 {
     var flow = PausedFlow();
     var run = new MainScreenRun("pause-frozen-0001");
+    run.PlayerMovement.Step(run.Player, new PlayerInput(0f, true, true), 0.02f);
+    run.PlayerMovement.Step(run.Player, new PlayerInput(0f, false, false), 0.02f);
+    run.PlayerMovement.Step(run.Player, new PlayerInput(0f, true, true), 0.02f);
+    Assert(run.Player.SecondJumpActive, "Pause test setup did not activate the second jump.");
     run.Player.TakeDamage(25);
     run.Enemies.Enemies[0].TakeDamage(25);
     run.Projectiles.Spawn(new Projectile(Vector2.Zero, Vector2.UnitX, 20f, 25, 0.34f, 0.34f, 0.28f));
@@ -144,6 +148,7 @@ static void PausedRunIsFrozenAndPreserved()
     var playerVelocity = player.Velocity;
     var playerHealth = player.Health;
     var playerFeedback = player.DamageFlashTime;
+    var secondJumpElapsed = player.SecondJumpElapsed;
     var enemyPosition = enemy.Position;
     var enemyVelocity = enemy.Velocity;
     var enemyHealth = enemy.Health;
@@ -161,6 +166,8 @@ static void PausedRunIsFrozenAndPreserved()
     Assert(player.Position == playerPosition && player.Velocity == playerVelocity && player.Health == playerHealth,
         "Paused player movement or health advanced.");
     Assert(player.DamageFlashTime == playerFeedback, "Paused player feedback timer advanced.");
+    Assert(player.SecondJumpActive && player.SecondJumpElapsed == secondJumpElapsed,
+        "Paused gameplay advanced or cleared the active second-jump timer.");
     Assert(enemy.Position == enemyPosition && enemy.Velocity == enemyVelocity && enemy.Health == enemyHealth &&
            enemy.ContactTimer == enemyContact,
         "Paused enemy navigation/combat state advanced.");
@@ -172,6 +179,9 @@ static void PausedRunIsFrozenAndPreserved()
     var resume = flow.Handle(MenuAction.TogglePause);
     Assert(resume.ResumeGameplay && ReferenceEquals(run.Player, player) && run.Seed == seed,
         "Resume did not preserve the exact suspended run.");
+    run.Step(new PlayerInput(0f, false, false), false, 0.02f);
+    Assert(player.SecondJumpElapsed > secondJumpElapsed,
+        "Resumed gameplay did not continue the second-jump timer from its frozen value.");
 }
 
 static void PauseRestartAndNewCaveSemantics()

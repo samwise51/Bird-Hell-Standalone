@@ -71,7 +71,12 @@ public sealed class PlayerAnimationState
         if (_rollPlaying)
         {
             _rollPlayback.Advance(deltaTime);
-            if (_rollPlayback.IsFinished) _rollPlaying = false;
+            if (_rollPlayback.IsFinished)
+            {
+                _rollPlaying = false;
+                if (!player.IsGrounded)
+                    _locomotionPlayback.Play(BirdHellVisuals.PlayerAirborne, restart: true);
+            }
         }
         if (desired is not PlayerVisualState.Attack and not PlayerVisualState.Roll)
             _locomotionPlayback.Advance(deltaTime);

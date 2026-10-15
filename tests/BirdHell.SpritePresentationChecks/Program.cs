@@ -22,6 +22,8 @@ CheckPlayerClip(BirdHellVisuals.PlayerCrouch, 3, 1, 1, 1f, true);
 CheckPlayerClip(BirdHellVisuals.PlayerRoll, 4, 0, 6, 1f / 12f, false);
 CheckPlayerClip(BirdHellVisuals.PlayerAttack, 5, 0, 7, 1f / 14f, false);
 AssertNear(BirdHellVisuals.PlayerRoll.Duration, 0.5f, "Roll duration is not 0.5 seconds.");
+AssertNear(BirdHellVisuals.PlayerRoll.Duration, PlayerMovementSystem.SecondJumpDuration,
+    "Roll presentation duration is not synchronized with the core second-jump duration.");
 AssertNear(BirdHellVisuals.PlayerAttack.Duration, 0.5f, "Attack duration is not 0.5 seconds.");
 var jumpPlayback = new AnimationPlayback(BirdHellVisuals.PlayerJump);
 jumpPlayback.Advance(BirdHellVisuals.PlayerJump.Duration * 2f);
@@ -110,9 +112,8 @@ Assert(player.State == PlayerVisualState.Airborne,
 player.Reset(airborneSnapshot);
 player.Update(airborneSnapshot, false, true, 0f);
 player.Update(airborneSnapshot, false, false, BirdHellVisuals.PlayerRoll.Duration);
-Assert(player.State == PlayerVisualState.Jump, "Completed early-air Roll did not return to Jump.");
-player.Update(airborneSnapshot, false, false, BirdHellVisuals.PlayerJump.Duration);
-Assert(player.State == PlayerVisualState.Airborne, "Completed post-Roll Jump did not settle on Airborne.");
+Assert(player.State == PlayerVisualState.Airborne && player.Playback.CurrentFrameIndex == 0,
+    "Completed Roll did not transition directly to the normal Airborne presentation.");
 player.Update(airborneSnapshot, false, true, 0f);
 player.Update(new PlayerVisualSnapshot(true, true, false, 0f), false, false, 0f);
 Assert(player.State == PlayerVisualState.Idle, "Landing did not clear active Roll state.");
