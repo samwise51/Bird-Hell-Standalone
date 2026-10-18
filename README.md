@@ -1,89 +1,101 @@
 # Bird Hell Standalone
 
-Bird Hell Standalone is a standalone C# port of the original Unity game **Bird Hell**.
+Bird Hell Standalone is a standalone C#/.NET and MonoGame reimplementation of the original Unity game **Bird Hell**. It carries the original project's procedural cave and combat ideas into a desktop-focused codebase that does not require Unity.
 
-This foundation uses:
+Each run places you in a generated cave with a flock of hostile birds. Move through the terrain, use two-stage jumping to navigate ledges and passages, and shoot the birds while avoiding contact damage. Clearing the flock leaves you free to explore; you can replay the same cave or generate a new one at any time.
 
-- .NET 10
-- MonoGame DesktopGL
-- Linux desktop as the current development target
+## Features
 
-Windows support is planned for a later stage, with potential mobile targets after the desktop port. The port will preserve the original game's behavior where practical while keeping game logic separate from rendering and platform-specific code.
+- Procedurally generated cave runs with deterministic seeds and selectable cave profiles
+- Responsive horizontal movement, a variable-height first jump, and a second air jump
+- Directional projectile combat with health, contact damage, death, and hit feedback
+- Animated bird enemies that pursue the player using cave-aware navigation and pathfinding
+- Keyboard and mouse controls plus gamepad support
+- Main, options, and pause menus, including same-seed restart and new-cave actions
+- Configurable bird count, cave profile, invincibility, and windowed/fullscreen display mode
+- Music and gameplay sound effects
+- Hand-painted cave materials, edge treatments, deterministic scenery, and sparse decorative cave elements
 
-## Build
+## Controls
+
+### Gameplay
+
+| Action | Keyboard / Mouse | Gamepad |
+| --- | --- | --- |
+| Move | `A` / `D` or Left / Right arrows | Left stick |
+| Jump | `Space` | A |
+| Crouch pose | `S` or Down arrow | — |
+| Shoot | Left mouse button or Left Ctrl | Right trigger |
+| Pause / resume | `Esc` | Start / Menu |
+| New cave | `R` | — |
+| Restart same cave seed | `F5` | — |
+
+The first jump is variable-height: hold the jump control to rise higher. Release and press it again while airborne for the second jump. Shooting fires once per click, key press, or trigger pull in the direction the player is facing. Crouching currently changes the player animation only; it does not change movement, collision, or physics.
+
+### Menus
+
+| Action | Keyboard / Mouse | Gamepad |
+| --- | --- | --- |
+| Move selection | Arrow keys | D-pad or left stick |
+| Change an option | Left / Right arrows or click an option arrow | D-pad or left stick Left / Right |
+| Select | `Enter`, `Space`, or left click | A |
+| Back from Options | `Esc` | Select / View |
+| Resume from pause | `Esc` | Start / Menu |
+
+Mouse movement can focus menu items, and left click activates them. Controller B is not currently assigned to a global Back or Pause action.
+
+### Debugging
+
+These keyboard toggles are available while gameplay is active:
+
+- `O`: terrain outlines
+- `C`: player collision, ground normal, and aim/facing
+- `N`: navigation obstacles and the first living bird's path and steering target
+- `V`: procedural cloud atmosphere visibility
+
+## Gameplay
+
+A run begins with a living player and a configurable flock of birds. The birds navigate the cave toward the player and deal damage on contact. Player shots travel horizontally, collide with cave terrain, and damage birds. When player health reaches zero, movement and firing stop until the run is restarted or replaced; the game does not restart automatically.
+
+Press `F5` or choose **Restart** from the pause menu to rebuild the run with the same seed. This reproduces the cave and its seeded placements while resetting the player, enemies, and projectiles. Press `R` or choose **New Cave** for a fresh seed. The pause menu can also resume play or return to the main menu.
+
+## Procedural Caves
+
+Caves are generated from deterministic seeds. Reusing a seed with the same cave profile reproduces the generated cave, player spawn, enemy placement, and seed-derived presentation; generating a new seed produces a different run.
+
+The cave presentation uses hand-painted terrain materials, floor, ceiling, and wall surface treatments, and sparse boulder accents. Scenery and cave decoration are deterministic presentation layers. They do not alter the authoritative generated cave collision used by movement, projectiles, spawning, or enemy navigation.
+
+## Building and Running
+
+### Requirements
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- A desktop environment supported by MonoGame DesktopGL
+
+From the repository root, build the solution:
 
 ```sh
-dotnet restore BirdHell.sln
 dotnet build BirdHell.sln
 ```
 
-## Run
+Run the game:
 
 ```sh
 dotnet run --project src/BirdHell/BirdHell.csproj
 ```
 
-To capture only Update, Draw, simulation catch-up, input-polling, or between-callback delays of at least
-100 ms, enable the development stall diagnostics:
+The project targets `net10.0` and uses MonoGame DesktopGL 3.8.5.1.
 
-```sh
-dotnet run --project src/BirdHell/BirdHell.csproj -- --stall-diagnostics
-```
+## Platform Support
 
-The JSONL output path is printed to the terminal at startup. Root Update/Draw/callback events retain the
-100 ms threshold. When Update is slow, its keyboard, mouse, per-controller gamepad, input-adapter,
-lifecycle, accumulator, simulation, and base-Update children use a 25 ms threshold and share an event-group
-ID. Slow simulation steps are further divided by gameplay system. Use `--stall-diagnostics-dir <directory>`
-ID. Slow simulation steps are further divided by gameplay system. Slow Draw calls are divided into clear,
-environment layers, camera/cave work, entity submissions, SpriteBatch Begin/End calls, debug overlays, and
-base Draw. Use `--stall-diagnostics-dir <directory>` to select the output directory. Stall diagnostics and
-the much heavier Flight Recorder are independent. Within an already-slow enemy-navigation section,
-5 ms fine-grained records distinguish each bird's repath, endpoint resolution, radius-clear searches,
-A*, direct-target check, and movement/steering work.
+Bird Hell Standalone is currently developed and tested on Linux. MonoGame DesktopGL is intended to keep the project portable across desktop systems, but Windows and macOS builds are not currently claimed as officially tested releases. Broader desktop publishing support remains future work.
 
-Radius-clear endpoint projection searches deterministic nearest-first grid rings and stops once no unvisited
-cell can beat the selected endpoint. Collider clearance, component constraints, maximum distance, and the
-legacy row-major tie-break remain unchanged; synchronized 0.5-second bird repaths remain unchanged.
+## Project Status
 
-## Controls
+The standalone port is under active development. The core procedural run, movement, combat, enemies, menus, audio, and current cave presentation are implemented, while gameplay balance, visuals, platform packaging, and overall polish continue to evolve.
 
-- `A` / `D`, Left / Right, or controller left stick: move
-- `SPACE` or controller A: variable-height first jump, then a fixed 0.5-second aerial boost shown as a Roll
-- `S` or Down: crouch animation only (movement, physics, and collider are unchanged)
-- Left mouse button, Left Ctrl, or controller right trigger: fire once per press/pull in the direction the player faces
-- `R`: start a fresh run with a new cave seed while gameplay is active
-- `F5`: restart the active run with the exact current seed
-- `O`: toggle terrain outlines
-- `C`: toggle the player collider, ground-normal, and fixed-aim/facing debug view
-- `N`: toggle navigation obstacles plus the first living enemy's path and steering target
-- `V`: toggle the procedural cloud atmosphere (presentation only)
-- `ESC` or controller Start/Menu: pause during gameplay and resume while paused
-- controller Select/View: Back in nested menus such as Options (it does not pause gameplay)
-- controller B: unused for menu Back/Pause
-- Pause Menu: Resume, same-seed Restart, fresh-seed New Cave, or Return to Main Menu
+## Original Project
 
-The game uses a 50 Hz renderer-independent player/projectile/enemy simulation. Its logical 2D camera starts at `(0,0)` and, once per fixed step, lerps toward `player position + (0,1)` by exactly `0.15`. The view always spans 10 world units vertically; viewport aspect determines the horizontal span. There is no clamp, dead zone, or look-ahead, so horizontal and vertical movement remain smooth even beyond cave edges.
+This repository is a standalone reimplementation/port of the original Unity project and aims to preserve its behavior where practical while using a separate C#/.NET and MonoGame architecture.
 
-The normalized anime explorer atlas, normalized purple-bird flight atlas, and original sword/slash sprites provide production gameplay presentation. The player switches deterministically among idle, run, takeoff jump, sustained airborne, second-jump roll, crouch, and non-looping attack animations. Each bird uses a stable run-seed/ID-derived flap phase and subtle visual-only rate variation, so flocks do not flap in lockstep; projectiles retain their original looping frames. The `C` debug view remains separate and shows collision plus a short yellow line from the weapon muzzle in the fixed horizontal aim/facing direction. The window title shows player health, living enemy count, player death, and `ALL BIRDS DEAD`.
-
-The normalized player and purple-bird atlases and the sword/slash use bilinear filtering. The explorer uses a fixed normalized body pivot, a shared grounded baseline, and a `1.2` presentation scale; its representative `123`-pixel visible body is approximately `1.476` world units tall (about `106` screen pixels at 720p). The purple bird uses its manifest `(80,72)` torso pivot and a `1.3` presentation scale; its tallest measured 94-pixel wing pose is approximately 88 screen pixels at 720p. Authoritative player and enemy colliders remain unchanged, so the bird's wings intentionally extend beyond its approximately `0.9161`-unit-diameter collider.
-
-### Canonical Player Artwork
-
-Production player animations come from the fixed `192 × 176` cells in `art/Source/Player/Canonical`. The runtime asset builder verifies the canonical manifest and source hashes, then directly copies those cells into `src/BirdHell/Content/Sprites/Player/player_explorer_runtime_v1.png` without geometric resampling. Per-animation normalization of the original artwork is isolated in `tools/build_canonical_player_sources.py`; runtime validation checks exact canonical equivalence, atlas placement, alpha cleanliness, and the straight-PNG/premultiplied-upload contract.
-
-The retired Sunnyland presentation remains on disk for comparison but is no longer loaded. The standalone now composes 16 transparent alien-desert assets into deterministic mountain, city, ruin, rock, and rare-plant layers. Named per-layer sub-seeds derive from the run seed: `F5` reproduces the layout, while `R` changes it without perturbing gameplay RNG. Each layer uses independent horizontal/vertical parallax, overscan, culling, tint, opacity, and brightness settings without changing `Camera2D`.
-
-Behind the authored scenery, four deterministic `512 × 256` tileable cloud alpha fields are generated once from a visual-only seed using anisotropic, domain-warped, five-octave value noise. SpriteBatch linearly filters and cross-fades neighboring temporal phases while elapsed presentation time drives slow drift and evolution. Clouds use very distant parallax (`0.04` horizontal, `0.015` vertical), allocate nothing in the update/draw loop, and never touch gameplay RNG. `R` and `F5` preserve atmospheric seed, clock, phase, and visibility. Cave terrain still occludes all environment decoration and debug overlays draw last. Impact/death effects, audio, exact red damage-flash parity, and other effect work remain deferred.
-
-The procedural cave geometry is rendered with a repeating hand-painted neutral rock material. UVs come directly from world position at a fixed `6 × 6` world-unit repeat, so the material remains continuous across indexed cave triangles and fixed to the cave while the camera moves or the viewport changes. A second presentation-only pass places a horizontally repeating painted ledge ribbon on existing boundaries whose traversable-side normal faces upward. The ribbon is derived deterministically from `cave_tileset_hand_painted_v1.png`, anchors its U coordinate in world space, and extends only as visual overhang/inset around the unchanged boundary. Cave collision, outlines, navigation, spawning, seed-derived geometry, and gameplay RNG continue to use the independent authoritative marching-squares data.
-
-## Procedural run lifecycle
-
-Each run contains one generated cave, one 100-health player, and exactly 15 birds. The lifecycle has only three derived states:
-
-- `Playing`: the player is alive and at least one bird is alive.
-- `PlayerDead`: health reached zero; movement and firing remain disabled until `R`, `F5`, Pause Restart, or Pause New Cave is selected. Nothing restarts automatically.
-- `AllBirdsDead`: the player remains controllable in the current cave; no birds respawn and nothing advances or regenerates until `R` or `F5` is pressed.
-
-Both reset keys replace the cave, collision, player, projectiles, enemies, and navigation as one complete run. Pause Menu Restart and New Cave route through those same reset paths. The camera retains its current logical position and smoothly travels toward the replacement player; it never retains a player/entity reference. Debug visualization toggles remain selected. While paused, simulation and recorder steps stop and the last gameplay frame is shown through a downsampled frosted-glass treatment. There are no levels, difficulty progression, scene transitions, score, death screen, or victory screen in the active procedural path.
+Original Unity project: [samwise51/Bird-Hell-Procedural](https://github.com/samwise51/Bird-Hell-Procedural)
