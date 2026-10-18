@@ -99,3 +99,9 @@ The standalone port is under active development. The core procedural run, moveme
 This repository is a standalone reimplementation/port of the original Unity project and aims to preserve its behavior where practical while using a separate C#/.NET and MonoGame architecture.
 
 Original Unity project: [samwise51/Bird-Hell-Procedural](https://github.com/samwise51/Bird-Hell-Procedural)
+
+## License
+
+The Bird Hell source code is licensed under the MIT License. See `LICENSE`.
+
+Artwork and music are distributed under separate terms described in `ASSETS.md`.
