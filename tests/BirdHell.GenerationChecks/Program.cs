@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using BirdHell.Systems;
 using BirdHell.World;
 using BirdHell.World.Geometry;
 
@@ -64,9 +67,64 @@ Console.WriteLine("PASS: repeated geometry generation from one CaveMap is determ
 Console.WriteLine("PASS: hand-authored maps exercise configurations 0-15 with original triangle counts");
 Console.WriteLine("PASS: ambiguous configurations 5 and 10 remain connected six-vertex polygons");
 
+foreach (var seed in new[] { "milestone-17-geometry-baseline", "milestone-1-repeatable-seed" })
+{
+    var fixedGeometry = geometryBuilder.Build(generator.Generate(seed));
+    var fixedCollision = new TerrainOccupancy(fixedGeometry).BoundarySegments;
+    var expected = seed == "milestone-17-geometry-baseline"
+        ? (Vertices: 1448, Triangles: 2192, Geometry: "3b45e3d8c0effbf3a729a1f96ad8435d7ea6cf13e719c5334558faf17e9609b7",
+            Collisions: 124, Collision: "4be30db2fb14790325a7eac89c877cb132ad6bff406abe862b1e70b353bfedef")
+        : (Vertices: 1337, Triangles: 1974, Geometry: "0d77e5e95095c84425a7a7a04a103af8348061ec10e28916bffec2930d326d4b",
+            Collisions: 123, Collision: "c0bf7daffaacb5f0a577b65af1fc2242083f95943941bcf75fe9cf82f2fb393a");
+    Assert(fixedGeometry.Vertices.Count == expected.Vertices &&
+           fixedGeometry.Triangles.Count == expected.Triangles &&
+           GeometryHash(fixedGeometry) == expected.Geometry &&
+           fixedCollision.Count == expected.Collisions &&
+           CollisionHash(fixedCollision) == expected.Collision,
+        $"Milestone 18 changed fixed-seed geometry or collision for '{seed}'.");
+    Console.WriteLine($"PASS: {seed} retains its pre-Milestone 18 geometry/collision fingerprint " +
+                      $"({fixedGeometry.Vertices.Count} vertices, {fixedGeometry.Triangles.Count} triangles, " +
+                      $"{fixedCollision.Count} collision segments)");
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
+}
+
+static string GeometryHash(CaveGeometry geometry)
+{
+    using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    Span<byte> bytes = stackalloc byte[12];
+    foreach (var vertex in geometry.Vertices)
+    {
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, BitConverter.SingleToInt32Bits(vertex.X));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes[4..], BitConverter.SingleToInt32Bits(vertex.Y));
+        hash.AppendData(bytes[..8]);
+    }
+    foreach (var triangle in geometry.Triangles)
+    {
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, triangle.A);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes[4..], triangle.B);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes[8..], triangle.C);
+        hash.AppendData(bytes);
+    }
+    return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+}
+
+static string CollisionHash(IReadOnlyList<TerrainSegment> segments)
+{
+    using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    Span<byte> bytes = stackalloc byte[16];
+    foreach (var segment in segments)
+    {
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, BitConverter.SingleToInt32Bits(segment.A.X));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes[4..], BitConverter.SingleToInt32Bits(segment.A.Y));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes[8..], BitConverter.SingleToInt32Bits(segment.B.X));
+        BinaryPrimitives.WriteInt32LittleEndian(bytes[12..], BitConverter.SingleToInt32Bits(segment.B.Y));
+        hash.AppendData(bytes);
+    }
+    return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
 }
 
 static CaveMap CreateConfigurationMap(int configuration)

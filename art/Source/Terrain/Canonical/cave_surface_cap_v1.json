@@ -1,0 +1,54 @@
+{
+  "formatVersion": 1,
+  "source": {
+    "path": "art/Source/Terrain/cave_tileset_hand_painted_v1.png",
+    "sha256": "8902a8076bc7d2978b020297eb58ba1399ed467a2e0897e5ce6e99d74bd630d1",
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "crop": [
+      145,
+      156,
+      565,
+      240
+    ],
+    "cropDescription": "interior span of first long horizontal ledge: air, pebble silhouette, soil lip, shallow rock course",
+    "background": "pure black RGB matte"
+  },
+  "output": {
+    "path": "art/Source/Terrain/Canonical/cave_surface_cap_v1.png",
+    "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_surface_cap_v1.png",
+    "dimensions": [
+      512,
+      128
+    ],
+    "sha256": "82456cc047a7f0b2fbfc5b770e5dd386ac6e733e468eda509ce9368dabe9f765",
+    "mode": "RGBA",
+    "alphaMode": "premultiplied alpha recovered from black matte"
+  },
+  "generation": {
+    "method": "near-black matte alpha recovery followed by three-phase horizontal raised-cosine overlap blend and opposing-edge feather",
+    "resampling": "Pillow LANCZOS",
+    "deterministic": true,
+    "backgroundCutoff": 18,
+    "seamFeatherPixels": 24
+  },
+  "edgeSeamMetrics": {
+    "meanRgbaDifference": 1.3804,
+    "rmsRgbaDifference": 3.1191,
+    "maximumRepresentativeDifferenceP95": 6.0
+  },
+  "intendedFilter": "linear",
+  "intendedWrapMode": {
+    "u": "wrap",
+    "v": "clamp"
+  },
+  "presentation": {
+    "worldRepeatLength": 2.75,
+    "worldOpenOverhang": 0.18,
+    "worldSolidDepth": 0.62,
+    "eligibleBoundary": "traversable-side normal y >= 0.35"
+  },
+  "status": "production"
+}

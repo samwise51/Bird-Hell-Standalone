@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "source": {
+    "path": "art/Source/Terrain/hand_painted_cave_terrain_asset_sheet.png",
+    "sha256": "4a00075a4c68fe85a3e69f205f613210176219fca7f10b08fd6b61a25227a727",
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "crop": [
+      24,
+      878,
+      220,
+      1058
+    ],
+    "cropDescription": "painted interior of first neutral brown material swatch"
+  },
+  "output": {
+    "path": "art/Source/Terrain/Canonical/cave_base_material_v1.png",
+    "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_base_material_v1.png",
+    "dimensions": [
+      512,
+      512
+    ],
+    "sha256": "3c60b37fd6d1a9e700944ff79a69e280109309a7b27dedd048110f74abe90ddb",
+    "mode": "RGB",
+    "alphaMode": "opaque RGB"
+  },
+  "generation": {
+    "method": "three-phase per-axis toroidal raised-cosine overlap blend with narrow opposing-edge feather",
+    "resampling": "Pillow LANCZOS",
+    "deterministic": true,
+    "edgeBandPixels": 8,
+    "seamFeatherPixels": 24
+  },
+  "edgeSeamMetrics": {
+    "leftRight": {
+      "meanRgbDifference": 1.2889,
+      "rmsRgbDifference": 2.2047,
+      "maximumRepresentativeDifferenceP95": 5.0
+    },
+    "topBottom": {
+      "meanRgbDifference": 1.0345,
+      "rmsRgbDifference": 1.6972,
+      "maximumRepresentativeDifferenceP95": 4.0
+    }
+  },
+  "intendedFilter": "linear",
+  "intendedWrapMode": {
+    "u": "wrap",
+    "v": "wrap"
+  },
+  "intendedWorldRepeatSize": {
+    "width": 6.0,
+    "height": 6.0
+  },
+  "status": "production"
+}

@@ -3,8 +3,93 @@ using System.Reflection;
 using BirdHell.Entities;
 using BirdHell.Presentation;
 using BirdHell.Systems;
+using BirdHell.World;
+using BirdHell.World.Geometry;
+using Microsoft.Xna.Framework.Graphics;
 
 const float tolerance = 0.00001f;
+
+Assert(CaveMaterialPresentation.TexturePath == "Sprites/Terrain/cave_base_material_v1.png",
+    "Cave rendering does not select the dedicated canonical runtime material.");
+Assert(CaveMaterialPresentation.MaterialWorldWidth == 6f &&
+       CaveMaterialPresentation.MaterialWorldHeight == 6f,
+    "Cave material world repeat dimensions changed or are invalid.");
+Assert(CaveMaterialPresentation.Filter == TextureFilter.Linear &&
+       CaveMaterialPresentation.AddressU == TextureAddressMode.Wrap &&
+       CaveMaterialPresentation.AddressV == TextureAddressMode.Wrap,
+    "Cave material metadata does not require linear filtering and wrapping on both axes.");
+Assert(CaveMaterialPresentation.SurfaceCapTexturePath == "Sprites/Terrain/cave_surface_cap_v1.png",
+    "Cave rendering does not select the canonical surface-cap ribbon.");
+Assert(CaveMaterialPresentation.SurfaceCapWorldRepeatLength == 2.75f &&
+       CaveMaterialPresentation.SurfaceCapOpenOverhang == 0.18f &&
+       CaveMaterialPresentation.SurfaceCapSolidDepth == 0.62f &&
+       CaveMaterialPresentation.MinimumSurfaceOpenNormalY == 0.35f,
+    "Surface-cap world placement metadata differs from the canonical manifest.");
+Assert(CaveMaterialPresentation.SurfaceCapAddressV == TextureAddressMode.Clamp,
+    "Surface cap must wrap along the boundary and clamp across its depth.");
+var baseUv = CaveMaterialPresentation.WorldToUv(3f, -12f);
+var repeatedUvX = CaveMaterialPresentation.WorldToUv(
+    3f + CaveMaterialPresentation.MaterialWorldWidth, -12f);
+var repeatedUvY = CaveMaterialPresentation.WorldToUv(
+    3f, -12f + CaveMaterialPresentation.MaterialWorldHeight);
+AssertVector(baseUv, new Vector2(0.5f, -2f), "Known cave world position mapped to the wrong UV.");
+AssertVector(repeatedUvX, baseUv + Vector2.UnitX,
+    "One material width in world space did not advance U by exactly one.");
+AssertVector(repeatedUvY, baseUv + Vector2.UnitY,
+    "One material height in world space did not advance V by exactly one.");
+
+var materialTiles = new CaveTile[2, 2];
+for (var x = 0; x < 2; x++)
+for (var y = 0; y < 2; y++)
+    materialTiles[x, y] = CaveTile.Wall;
+var materialGeometry = new CaveGeometryBuilder().Build(new CaveMap(materialTiles));
+var materialVertices = CaveMaterialPresentation.BuildVertices(materialGeometry);
+Assert(materialVertices.Length == materialGeometry.Vertices.Count &&
+       materialVertices.All(vertex => vertex.GetType() == typeof(VertexPositionTexture)),
+    "Cave render data does not contain exactly one textured vertex per authoritative world vertex.");
+var sharedVertexIndex = materialGeometry.Triangles
+    .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C })
+    .GroupBy(index => index)
+    .First(group => group.Count() > 1).Key;
+var sharedWorldVertex = materialGeometry.Vertices[sharedVertexIndex];
+var sharedUv = CaveMaterialPresentation.WorldToUv(sharedWorldVertex.X, sharedWorldVertex.Y);
+AssertVector(
+    new Vector2(materialVertices[sharedVertexIndex].TextureCoordinate.X,
+        materialVertices[sharedVertexIndex].TextureCoordinate.Y),
+    sharedUv,
+    "Adjacent triangles do not share the same world-position-derived UV.");
+Console.WriteLine("PASS: cave material path, 6x6 world mapping, textured vertices, linear wrap, and shared-vertex continuity");
+
+var capTiles = new CaveTile[3, 3];
+for (var x = 0; x < 3; x++)
+for (var y = 0; y < 3; y++)
+    capTiles[x, y] = x == 1 && y == 1 ? CaveTile.Open : CaveTile.Wall;
+var capGeometry = new CaveGeometryBuilder().Build(new CaveMap(capTiles));
+var capGeometryVerticesBefore = capGeometry.Vertices.ToArray();
+var capGeometryTrianglesBefore = capGeometry.Triangles.ToArray();
+var capVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(capGeometry);
+var repeatedCapVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(capGeometry);
+Assert(capVertices.Length > 0 && capVertices.Length % 6 == 0,
+    "Walkable cave boundaries did not produce complete surface-cap quads.");
+Assert(capVertices.SequenceEqual(repeatedCapVertices),
+    "Repeated surface-cap cache builds from one geometry were not deterministic.");
+Assert(capVertices.All(vertex => float.IsFinite(vertex.Position.X) &&
+                                 float.IsFinite(vertex.Position.Y) &&
+                                 float.IsFinite(vertex.TextureCoordinate.X) &&
+                                 vertex.TextureCoordinate.Y is 0f or 1f),
+    "Surface-cap placement produced non-finite data or UVs outside the ribbon depth.");
+Assert(capGeometry.Vertices.SequenceEqual(capGeometryVerticesBefore) &&
+       capGeometry.Triangles.SequenceEqual(capGeometryTrianglesBefore),
+    "Building presentation-only surface caps mutated authoritative cave geometry.");
+Console.WriteLine("PASS: deterministic surface-cap quads, coherent U-wrap/V-clamp UVs, and geometry isolation");
+var fixedCapGeometry = new CaveGeometryBuilder().Build(
+    new CaveGenerator().Generate("milestone-17-geometry-baseline"));
+var fixedCapVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(fixedCapGeometry);
+Assert(fixedCapVertices.Length == 67 * 6,
+    "Fixed-seed surface-cap placement count changed from the reviewed Milestone 18 baseline.");
+Assert(fixedCapVertices.SequenceEqual(CaveMaterialPresentation.BuildSurfaceCapVertices(fixedCapGeometry)),
+    "Fixed-seed surface-cap placement did not reproduce exactly.");
+Console.WriteLine($"PASS: fixed-seed surface-cap placement produced {fixedCapVertices.Length / 6} deterministic quads");
 
 Assert(BirdHellVisuals.PlayerTexture == "Sprites/Player/player_explorer_runtime_v1.png",
     "Production player texture path does not select the normalized explorer atlas.");

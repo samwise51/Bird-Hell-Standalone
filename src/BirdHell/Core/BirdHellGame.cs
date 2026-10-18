@@ -21,14 +21,16 @@ public sealed class BirdHellGame : Game
     private readonly WorldAnimationState _animations = new();
     private readonly CloudAtmosphereState _atmosphere = new();
     private BasicEffect? _effect;
+    private CaveMaterialPresentation? _caveMaterial;
     private SpritePresentation? _spritePresentation;
     private EnvironmentPresentation? _environmentPresentation;
     private GameplayAudio? _audio;
     private MenuPresentation? _menuPresentation;
     private FrostedFramePresentation? _frostedFrame;
     private MainScreenRun? _run;
-    private VertexPositionColor[] _terrainVertices = [];
+    private VertexPositionTexture[] _terrainVertices = [];
     private int[] _triangleIndices = [];
+    private VertexPositionTexture[] _surfaceCapVertices = [];
     private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
     private MouseState _previousMouseState;
@@ -106,6 +108,7 @@ public sealed class BirdHellGame : Game
         _spritePresentation = new SpritePresentation(
             GraphicsDevice,
             contentRoot);
+        _caveMaterial = new CaveMaterialPresentation(GraphicsDevice, contentRoot);
         _environmentPresentation = new EnvironmentPresentation(GraphicsDevice, contentRoot);
         _audio = new GameplayAudio(Content);
         _audio.StartMusic();
@@ -457,6 +460,7 @@ public sealed class BirdHellGame : Game
         _menuPresentation?.Dispose();
         _frostedFrame?.Dispose();
         _audio?.Dispose();
+        _caveMaterial?.Dispose();
         _effect?.Dispose();
     }
 
@@ -696,6 +700,7 @@ public sealed class BirdHellGame : Game
         _simulationAccumulator = 0d;
         _terrainVertices = [];
         _triangleIndices = [];
+        _surfaceCapVertices = [];
         _outlineVertices = [];
         _gameplayInput.ClearBufferedEdges();
         _frostedFrame?.Release();
@@ -744,13 +749,11 @@ public sealed class BirdHellGame : Game
 
     private void BuildRenderData(CaveGeometry geometry)
     {
-        var terrainColor = new Color(218, 209, 176);
-        _terrainVertices = geometry.Vertices
-            .Select(vertex => new VertexPositionColor(new Vector3(vertex.X, vertex.Y, 0f), terrainColor))
-            .ToArray();
+        _terrainVertices = CaveMaterialPresentation.BuildVertices(geometry);
         _triangleIndices = geometry.Triangles
             .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C })
             .ToArray();
+        _surfaceCapVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(geometry);
 
         var outlineColor = new Color(255, 54, 149);
         var lineVertices = new List<VertexPositionColor>();
@@ -790,27 +793,76 @@ public sealed class BirdHellGame : Game
 
     private void DrawCaveGeometryCore(BasicEffect effect, ref RenderBatchTimings timings, bool captureTimings)
     {
+        if (_caveMaterial is null) return;
         var timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+        var previousBlendState = GraphicsDevice.BlendState;
+        var previousDepthStencilState = GraphicsDevice.DepthStencilState;
+        var previousRasterizerState = GraphicsDevice.RasterizerState;
+        var previousSamplerState = GraphicsDevice.SamplerStates[0];
+        var previousTexture = effect.Texture;
+        var previousTextureEnabled = effect.TextureEnabled;
+        var previousVertexColorEnabled = effect.VertexColorEnabled;
+        var previousLightingEnabled = effect.LightingEnabled;
+        var previousDiffuseColor = effect.DiffuseColor;
+        var previousAlpha = effect.Alpha;
         GraphicsDevice.BlendState = BlendState.Opaque;
         GraphicsDevice.DepthStencilState = DepthStencilState.None;
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+        GraphicsDevice.SamplerStates[0] = SamplerState.LinearWrap;
+        effect.Texture = _caveMaterial.Texture;
+        effect.TextureEnabled = true;
+        effect.VertexColorEnabled = false;
+        effect.LightingEnabled = false;
+        effect.DiffuseColor = Vector3.One;
+        effect.Alpha = 1f;
         if (captureTimings) timings.Preparation = FrameStallDiagnostics.Complete(timingStart);
 
-        timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
-        foreach (var pass in effect.CurrentTechnique.Passes)
+        try
         {
-            pass.Apply();
-            if (_triangleIndices.Length > 0)
-                GraphicsDevice.DrawUserIndexedPrimitives(
-                    PrimitiveType.TriangleList,
-                    _terrainVertices,
-                    0,
-                    _terrainVertices.Length,
-                    _triangleIndices,
-                    0,
-                    _triangleIndices.Length / 3);
+            timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+            foreach (var pass in effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                if (_triangleIndices.Length > 0)
+                    GraphicsDevice.DrawUserIndexedPrimitives(
+                        PrimitiveType.TriangleList,
+                        _terrainVertices,
+                        0,
+                        _terrainVertices.Length,
+                        _triangleIndices,
+                        0,
+                        _triangleIndices.Length / 3);
+            }
+            if (_surfaceCapVertices.Length > 0)
+            {
+                GraphicsDevice.BlendState = BlendState.AlphaBlend;
+                GraphicsDevice.SamplerStates[0] = _caveMaterial.SurfaceCapSampler;
+                effect.Texture = _caveMaterial.SurfaceCapTexture;
+                foreach (var pass in effect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    GraphicsDevice.DrawUserPrimitives(
+                        PrimitiveType.TriangleList,
+                        _surfaceCapVertices,
+                        0,
+                        _surfaceCapVertices.Length / 3);
+                }
+            }
+            if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
         }
-        if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
+        finally
+        {
+            effect.Texture = previousTexture;
+            effect.TextureEnabled = previousTextureEnabled;
+            effect.VertexColorEnabled = previousVertexColorEnabled;
+            effect.LightingEnabled = previousLightingEnabled;
+            effect.DiffuseColor = previousDiffuseColor;
+            effect.Alpha = previousAlpha;
+            GraphicsDevice.BlendState = previousBlendState;
+            GraphicsDevice.DepthStencilState = previousDepthStencilState;
+            GraphicsDevice.RasterizerState = previousRasterizerState;
+            GraphicsDevice.SamplerStates[0] = previousSamplerState;
+        }
     }
 
     private void DrawPlayer(SpritePresentation sprites)
