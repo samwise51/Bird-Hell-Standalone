@@ -1,0 +1,125 @@
+{
+  "formatVersion": 1,
+  "source": {
+    "path": "art/Source/Terrain/cave_tileset_hand_painted_v1.png",
+    "sha256": "8902a8076bc7d2978b020297eb58ba1399ed467a2e0897e5ce6e99d74bd630d1",
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "background": "pure black RGB matte"
+  },
+  "generation": {
+    "deterministic": true,
+    "backgroundCutoff": 18,
+    "seamFeatherPixels": 24
+  },
+  "assets": [
+    {
+      "id": "ceiling",
+      "sourceCrop": [
+        990,
+        0,
+        1200,
+        145
+      ],
+      "cropDescription": "downward-facing cave boundary ribbon",
+      "outputPath": "art/Source/Terrain/Canonical/cave_ceiling_cap_v1.png",
+      "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_ceiling_cap_v1.png",
+      "dimensions": [
+        512,
+        192
+      ],
+      "sha256": "d0a82cee0fd5472554728d663a4876c965544fc57c5b97293629199313bc1bdd",
+      "alphaMode": "premultiplied alpha recovered from black matte",
+      "generationMethod": "vertical flip, horizontal repeat synthesis",
+      "resampling": "Pillow LANCZOS",
+      "intendedFilter": "linear",
+      "intendedWrapMode": {
+        "u": "wrap",
+        "v": "clamp"
+      },
+      "placementPurpose": "downward-facing cave boundary ribbon",
+      "presentation": {
+        "worldRepeatLength": 3.25,
+        "worldOpenOverhang": 0.55,
+        "worldSolidDepth": 0.3
+      },
+      "status": "production",
+      "edgeSeamMetrics": {
+        "meanRgbaDifference": 1.8574,
+        "rmsRgbaDifference": 3.8648,
+        "maximumRepresentativeDifferenceP95": 9.0
+      }
+    },
+    {
+      "id": "wall",
+      "sourceCrop": [
+        8,
+        145,
+        98,
+        545
+      ],
+      "cropDescription": "strongly vertical cave boundary ribbon",
+      "outputPath": "art/Source/Terrain/Canonical/cave_wall_edge_v1.png",
+      "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_wall_edge_v1.png",
+      "dimensions": [
+        512,
+        128
+      ],
+      "sha256": "ad6faa2f692c1ebe6e24288301f50301630eb8abf491e0ad816685ffa8d75b91",
+      "alphaMode": "premultiplied alpha recovered from black matte",
+      "generationMethod": "90-degree counter-clockwise rotation, horizontal repeat synthesis",
+      "resampling": "Pillow LANCZOS",
+      "intendedFilter": "linear",
+      "intendedWrapMode": {
+        "u": "wrap",
+        "v": "clamp"
+      },
+      "placementPurpose": "strongly vertical cave boundary ribbon",
+      "presentation": {
+        "worldRepeatLength": 3.5,
+        "worldOpenOverhang": 0.14,
+        "worldSolidDepth": 0.55
+      },
+      "status": "production",
+      "edgeSeamMetrics": {
+        "meanRgbaDifference": 1.5901,
+        "rmsRgbaDifference": 3.2079,
+        "maximumRepresentativeDifferenceP95": 7.0
+      }
+    },
+    {
+      "id": "boulder",
+      "sourceCrop": [
+        704,
+        725,
+        786,
+        794
+      ],
+      "cropDescription": "sparse floor-boundary decoration",
+      "outputPath": "art/Source/Terrain/Canonical/cave_boulder_small_v1.png",
+      "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_boulder_small_v1.png",
+      "dimensions": [
+        128,
+        108
+      ],
+      "sha256": "e50b98fd7ea6163c115e1b32bf609b5942b179aec31945528a9cf4b8e1bb8b59",
+      "alphaMode": "premultiplied alpha recovered from black matte",
+      "generationMethod": "proportional resize",
+      "resampling": "Pillow LANCZOS",
+      "intendedFilter": "linear",
+      "intendedWrapMode": {
+        "u": "clamp",
+        "v": "clamp"
+      },
+      "placementPurpose": "sparse floor-boundary decoration",
+      "presentation": {
+        "worldWidth": 0.85,
+        "worldHeight": 0.55,
+        "worldSolidInset": 0.2
+      },
+      "status": "production"
+    }
+  ]
+}

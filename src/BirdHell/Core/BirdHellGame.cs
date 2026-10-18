@@ -30,7 +30,10 @@ public sealed class BirdHellGame : Game
     private MainScreenRun? _run;
     private VertexPositionTexture[] _terrainVertices = [];
     private int[] _triangleIndices = [];
+    private VertexPositionTexture[] _ceilingCapVertices = [];
+    private VertexPositionTexture[] _wallEdgeVertices = [];
     private VertexPositionTexture[] _surfaceCapVertices = [];
+    private VertexPositionTexture[] _boulderVertices = [];
     private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
     private MouseState _previousMouseState;
@@ -700,7 +703,10 @@ public sealed class BirdHellGame : Game
         _simulationAccumulator = 0d;
         _terrainVertices = [];
         _triangleIndices = [];
+        _ceilingCapVertices = [];
+        _wallEdgeVertices = [];
         _surfaceCapVertices = [];
+        _boulderVertices = [];
         _outlineVertices = [];
         _gameplayInput.ClearBufferedEdges();
         _frostedFrame?.Release();
@@ -743,17 +749,22 @@ public sealed class BirdHellGame : Game
         var keyboard = Keyboard.GetState();
         _animations.Reset(CreatePlayerVisualSnapshot(
             keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down)));
-        BuildRenderData(_run.Geometry);
+        BuildRenderData(_run.Geometry, _run.Seed, _run.Player.Position);
         UpdateWindowTitle();
     }
 
-    private void BuildRenderData(CaveGeometry geometry)
+    private void BuildRenderData(CaveGeometry geometry, string seed, System.Numerics.Vector2 playerSpawn)
     {
         _terrainVertices = CaveMaterialPresentation.BuildVertices(geometry);
         _triangleIndices = geometry.Triangles
             .SelectMany(triangle => new[] { triangle.A, triangle.B, triangle.C })
             .ToArray();
-        _surfaceCapVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(geometry);
+        var boundaries = CaveMaterialPresentation.AnalyzeBoundaries(geometry);
+        _ceilingCapVertices = CaveMaterialPresentation.BuildCeilingCapVertices(boundaries);
+        _wallEdgeVertices = CaveMaterialPresentation.BuildWallEdgeVertices(boundaries);
+        _surfaceCapVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(boundaries);
+        var boulders = CaveMaterialPresentation.BuildBoulderPlacements(boundaries, seed, playerSpawn);
+        _boulderVertices = CaveMaterialPresentation.BuildBoulderVertices(boulders);
 
         var outlineColor = new Color(255, 54, 149);
         var lineVertices = new List<VertexPositionColor>();
@@ -833,21 +844,13 @@ public sealed class BirdHellGame : Game
                         0,
                         _triangleIndices.Length / 3);
             }
-            if (_surfaceCapVertices.Length > 0)
-            {
-                GraphicsDevice.BlendState = BlendState.AlphaBlend;
-                GraphicsDevice.SamplerStates[0] = _caveMaterial.SurfaceCapSampler;
-                effect.Texture = _caveMaterial.SurfaceCapTexture;
-                foreach (var pass in effect.CurrentTechnique.Passes)
-                {
-                    pass.Apply();
-                    GraphicsDevice.DrawUserPrimitives(
-                        PrimitiveType.TriangleList,
-                        _surfaceCapVertices,
-                        0,
-                        _surfaceCapVertices.Length / 3);
-                }
-            }
+            GraphicsDevice.BlendState = BlendState.AlphaBlend;
+            GraphicsDevice.SamplerStates[0] = _caveMaterial.SurfaceCapSampler;
+            DrawCavePresentationVertices(effect, _caveMaterial.CeilingCapTexture, _ceilingCapVertices);
+            DrawCavePresentationVertices(effect, _caveMaterial.WallEdgeTexture, _wallEdgeVertices);
+            DrawCavePresentationVertices(effect, _caveMaterial.SurfaceCapTexture, _surfaceCapVertices);
+            GraphicsDevice.SamplerStates[0] = _caveMaterial.PropSampler;
+            DrawCavePresentationVertices(effect, _caveMaterial.BoulderTexture, _boulderVertices);
             if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
         }
         finally
@@ -862,6 +865,20 @@ public sealed class BirdHellGame : Game
             GraphicsDevice.DepthStencilState = previousDepthStencilState;
             GraphicsDevice.RasterizerState = previousRasterizerState;
             GraphicsDevice.SamplerStates[0] = previousSamplerState;
+        }
+    }
+
+    private void DrawCavePresentationVertices(
+        BasicEffect effect,
+        Texture2D texture,
+        VertexPositionTexture[] vertices)
+    {
+        if (vertices.Length == 0) return;
+        effect.Texture = texture;
+        foreach (var pass in effect.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, vertices, 0, vertices.Length / 3);
         }
     }
 

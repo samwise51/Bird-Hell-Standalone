@@ -91,6 +91,78 @@ Assert(fixedCapVertices.SequenceEqual(CaveMaterialPresentation.BuildSurfaceCapVe
     "Fixed-seed surface-cap placement did not reproduce exactly.");
 Console.WriteLine($"PASS: fixed-seed surface-cap placement produced {fixedCapVertices.Length / 6} deterministic quads");
 
+Assert(CaveMaterialPresentation.CeilingCapTexturePath == "Sprites/Terrain/cave_ceiling_cap_v1.png" &&
+       CaveMaterialPresentation.WallEdgeTexturePath == "Sprites/Terrain/cave_wall_edge_v1.png" &&
+       CaveMaterialPresentation.BoulderTexturePath == "Sprites/Terrain/cave_boulder_small_v1.png",
+    "Milestone 19 cave asset paths do not select the canonical runtime textures.");
+Assert(CaveMaterialPresentation.CeilingCapWorldRepeatLength == 3.25f &&
+       CaveMaterialPresentation.CeilingCapOpenOverhang == 0.55f &&
+       CaveMaterialPresentation.CeilingCapSolidDepth == 0.30f,
+    "Original Milestone 19 ceiling ribbon dimensions changed.");
+Assert(CaveMaterialPresentation.ClassifyBoundary(new Vector2(0f, 1f)) == CaveBoundaryCategory.Floor &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(0f, -1f)) == CaveBoundaryCategory.Ceiling &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(-1f, 0f)) == CaveBoundaryCategory.WallLeft &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(1f, 0f)) == CaveBoundaryCategory.WallRight &&
+       CaveMaterialPresentation.ClassifyBoundary(Vector2.Normalize(new Vector2(1f, -0.43f))) == CaveBoundaryCategory.Slope,
+    "Representative floor, ceiling, wall, or slope-oriented normals were misclassified.");
+Assert(CaveMaterialPresentation.ClassifyBoundary(new Vector2(0f, 0.3499f)) == CaveBoundaryCategory.Slope &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(0f, 0.35f)) == CaveBoundaryCategory.Floor &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(0f, -0.4499f)) == CaveBoundaryCategory.Slope &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(0f, -0.45f)) == CaveBoundaryCategory.Ceiling &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(0.8f, 0f)) == CaveBoundaryCategory.WallRight &&
+       CaveMaterialPresentation.ClassifyBoundary(new Vector2(0.7999f, 0f)) == CaveBoundaryCategory.Slope,
+    "Named boundary thresholds do not have deterministic near-threshold behavior.");
+Console.WriteLine("PASS: mutually exclusive boundary classification covers floor, ceiling, both walls, slopes, and thresholds");
+
+var fixedGeometryVerticesBefore = fixedCapGeometry.Vertices.ToArray();
+var fixedGeometryTrianglesBefore = fixedCapGeometry.Triangles.ToArray();
+var fixedBoundaries = CaveMaterialPresentation.AnalyzeBoundaries(fixedCapGeometry);
+var ceilingVertices = CaveMaterialPresentation.BuildCeilingCapVertices(fixedBoundaries);
+var wallVertices = CaveMaterialPresentation.BuildWallEdgeVertices(fixedCapGeometry);
+Assert(ceilingVertices.Length == 48 * 6 && ceilingVertices.Length % 6 == 0,
+    "Fixed-seed ceiling ribbon count changed from the original Milestone 19 baseline.");
+Assert(ceilingVertices.SequenceEqual(CaveMaterialPresentation.BuildCeilingCapVertices(fixedBoundaries)),
+    "Repeated ceiling ribbon cache builds were not deterministic.");
+Assert(wallVertices.Length > 0 && wallVertices.Length % 6 == 0 &&
+       wallVertices.SequenceEqual(CaveMaterialPresentation.BuildWallEdgeVertices(fixedCapGeometry)),
+    "Fixed cave did not produce deterministic complete wall ribbon quads.");
+Console.WriteLine($"PASS: original continuous ceiling ribbon produced {ceilingVertices.Length / 6} deterministic quads");
+var fixedBoulders = CaveMaterialPresentation.BuildBoulderPlacements(fixedCapGeometry, "milestone-17-geometry-baseline");
+var repeatedBoulders = CaveMaterialPresentation.BuildBoulderPlacements(fixedCapGeometry, "milestone-17-geometry-baseline");
+var alternateBoulders = CaveMaterialPresentation.BuildBoulderPlacements(fixedCapGeometry, "milestone-19-alternate-visual-seed");
+Assert(fixedBoulders.SequenceEqual(repeatedBoulders),
+    "Identical seed and geometry did not reproduce boulder positions and variants exactly.");
+Assert(!fixedBoulders.SequenceEqual(alternateBoulders),
+    "Different visual seeds did not vary deterministic boulder placement.");
+Assert(fixedBoulders.Length is > 0 and <= CaveMaterialPresentation.BoulderMaximumCount &&
+       fixedBoulders.All(instance => instance.AssetVariant == 0),
+    "Boulder placement is empty, exceeds its cap, or selected an unknown variant.");
+Assert(fixedBoulders.Length == 3,
+    "Fixed-seed boulder count changed from the reviewed Milestone 19 baseline.");
+var spawnClearedBoulders = CaveMaterialPresentation.BuildBoulderPlacements(
+    fixedCapGeometry, "milestone-17-geometry-baseline", fixedBoulders[0].Position);
+Assert(spawnClearedBoulders.All(instance =>
+        Vector2.Distance(instance.Position, fixedBoulders[0].Position) >= CaveMaterialPresentation.BoulderSpawnClearance),
+    "Boulder placement did not preserve its configured spawn-area clearance.");
+Assert(CaveMaterialPresentation.BuildBoulderVertices(fixedBoulders).Length == fixedBoulders.Length * 6,
+    "Boulder placement did not produce exactly one cached quad per decoration.");
+Assert(fixedCapGeometry.Vertices.SequenceEqual(fixedGeometryVerticesBefore) &&
+       fixedCapGeometry.Triangles.SequenceEqual(fixedGeometryTrianglesBefore),
+    "Milestone 19 presentation cache construction mutated authoritative geometry.");
+var categoryCounts = Enum.GetValues<CaveBoundaryCategory>()
+    .ToDictionary(category => category, category => fixedBoundaries.Count(segment => segment.Category == category));
+Assert(categoryCounts[CaveBoundaryCategory.Floor] == 67 &&
+       categoryCounts[CaveBoundaryCategory.Ceiling] == 48 &&
+       categoryCounts[CaveBoundaryCategory.WallLeft] == 2 &&
+       categoryCounts[CaveBoundaryCategory.WallRight] == 7 &&
+       categoryCounts[CaveBoundaryCategory.Slope] == 0,
+    "Fixed-seed boundary category counts changed from the Milestone 19 baseline.");
+Console.WriteLine($"PASS: fixed-seed boundary counts floor={categoryCounts[CaveBoundaryCategory.Floor]}, " +
+                  $"ceiling={categoryCounts[CaveBoundaryCategory.Ceiling]}, left-wall={categoryCounts[CaveBoundaryCategory.WallLeft]}, " +
+                  $"right-wall={categoryCounts[CaveBoundaryCategory.WallRight]}, slope={categoryCounts[CaveBoundaryCategory.Slope]}");
+Console.WriteLine($"PASS: deterministic visual-only boulder placement produced {fixedBoulders.Length} fixed-seed props and " +
+                  $"{alternateBoulders.Length} alternate-seed props without gameplay RNG");
+
 Assert(BirdHellVisuals.PlayerTexture == "Sprites/Player/player_explorer_runtime_v1.png",
     "Production player texture path does not select the normalized explorer atlas.");
 Assert(BirdHellVisuals.PlayerClips.Count == 7 &&
