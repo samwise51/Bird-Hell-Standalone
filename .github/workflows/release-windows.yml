@@ -1,0 +1,135 @@
+name: Release Windows Build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+
+      - name: Restore Windows x64 dependencies
+        run: dotnet restore src/BirdHell/BirdHell.csproj -r win-x64
+
+      - name: Run lifecycle checks
+        run: dotnet run --project tests/BirdHell.LifecycleChecks/BirdHell.LifecycleChecks.csproj -c Release
+
+      - name: Run input checks
+        run: dotnet run --project tests/BirdHell.InputChecks/BirdHell.InputChecks.csproj -c Release
+
+      - name: Run menu checks
+        run: dotnet run --project tests/BirdHell.MenuChecks/BirdHell.MenuChecks.csproj -c Release
+
+      - name: Run camera presentation checks
+        run: dotnet run --project tests/BirdHell.CameraPresentationChecks/BirdHell.CameraPresentationChecks.csproj -c Release
+
+      - name: Run sprite presentation checks
+        run: dotnet run --project tests/BirdHell.SpritePresentationChecks/BirdHell.SpritePresentationChecks.csproj -c Release
+
+      - name: Run environment presentation checks
+        run: dotnet run --project tests/BirdHell.EnvironmentPresentationChecks/BirdHell.EnvironmentPresentationChecks.csproj -c Release
+
+      - name: Publish Windows x64 build
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:GITHUB_WORKSPACE "release\win-x64"
+          dotnet publish src/BirdHell/BirdHell.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -o $staging
+
+      - name: Add licensing documentation
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:GITHUB_WORKSPACE "release\win-x64"
+          Copy-Item LICENSE (Join-Path $staging "LICENSE")
+          Copy-Item ASSETS.md (Join-Path $staging "ASSETS.md")
+
+      - name: Validate published package
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:GITHUB_WORKSPACE "release\win-x64"
+          $requiredPaths = @(
+            "BirdHell.exe"
+            "Content"
+            "SDL2.dll"
+            "openal.dll"
+            "Content\Sprites\Player\player_explorer_runtime_v1.png"
+            "Content\Sprites\Enemy\enemy_bird_purple_flight_runtime_v1.png"
+            "Content\Sprites\Terrain\cave_base_material_v1.png"
+            "Content\Sprites\Background\back.png"
+            "Content\audio\Fading Poisons.xnb"
+            "Content\audio\blaster.xnb"
+            "Content\audio\hit.xnb"
+            "Content\audio\death_sound.xnb"
+            "Content\audio\enemy_death.xnb"
+            "LICENSE"
+            "ASSETS.md"
+          )
+
+          foreach ($relativePath in $requiredPaths) {
+            $path = Join-Path $staging $relativePath
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Required release package path is missing: $relativePath"
+            }
+          }
+
+      - name: Create Windows ZIP
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:GITHUB_WORKSPACE "release\win-x64"
+          $zipName = "Bird-Hell-${{ github.ref_name }}-win-x64.zip"
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE $zipName
+          Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipPath -CompressionLevel Optimal
+
+      - name: Validate Windows ZIP
+        shell: pwsh
+        run: |
+          $zipName = "Bird-Hell-${{ github.ref_name }}-win-x64.zip"
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE $zipName
+          if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf)) {
+            throw "Release ZIP was not created: $zipName"
+          }
+
+          $zip = Get-Item -LiteralPath $zipPath
+          if ($zip.Length -le 0) {
+            throw "Release ZIP is empty: $zipName"
+          }
+          Write-Host "Created $zipName ($($zip.Length) bytes)."
+
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $entryNames = @($archive.Entries | ForEach-Object { $_.FullName })
+            if ($entryNames -notcontains "BirdHell.exe") {
+              throw "Release ZIP does not contain BirdHell.exe at its root."
+            }
+            if (-not ($entryNames | Where-Object { $_ -like "Content/*" })) {
+              throw "Release ZIP does not contain the Content directory at its root."
+            }
+          }
+          finally {
+            $archive.Dispose()
+          }
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "Bird-Hell-${{ github.ref_name }}-win-x64.zip"
+          gh release create "${{ github.ref_name }}" $zipPath --generate-notes

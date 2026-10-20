@@ -86,9 +86,13 @@ dotnet run --project src/BirdHell/BirdHell.csproj
 
 The project targets `net10.0` and uses MonoGame DesktopGL 3.8.5.1.
 
+## Downloads
+
+Prebuilt Windows x64 builds are published through GitHub Releases when versioned releases are available. Each Windows release is self-contained and does not require a separate .NET or MonoGame installation.
+
 ## Platform Support
 
-Bird Hell Standalone is currently developed and tested on Linux. MonoGame DesktopGL is intended to keep the project portable across desktop systems, but Windows and macOS builds are not currently claimed as officially tested releases. Broader desktop publishing support remains future work.
+Bird Hell Standalone is developed on Linux, and its self-contained Windows x64 build has been tested on Windows 11. MonoGame DesktopGL is intended to keep the project portable across desktop systems, but packaged releases for other platforms are not currently provided.
 
 ## Project Status
 
