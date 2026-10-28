@@ -93,8 +93,10 @@ Console.WriteLine($"PASS: fixed-seed surface-cap placement produced {fixedCapVer
 
 Assert(CaveMaterialPresentation.CeilingCapTexturePath == "Sprites/Terrain/cave_ceiling_cap_v1.png" &&
        CaveMaterialPresentation.WallEdgeTexturePath == "Sprites/Terrain/cave_wall_edge_v1.png" &&
-       CaveMaterialPresentation.BoulderTexturePath == "Sprites/Terrain/cave_boulder_small_v1.png",
-    "Milestone 19 cave asset paths do not select the canonical runtime textures.");
+       CaveMaterialPresentation.BoulderTexturePath == "Sprites/Terrain/cave_boulder_small_v1.png" &&
+       CaveMaterialPresentation.StalagmiteTexturePath == "Sprites/Terrain/cave_stalagmite_cluster_v1.png" &&
+       CaveMaterialPresentation.StalactiteTexturePath == "Sprites/Terrain/cave_stalactite_single_v1.png",
+    "Cave asset paths do not select the canonical runtime textures.");
 Assert(CaveMaterialPresentation.CeilingCapWorldRepeatLength == 3.25f &&
        CaveMaterialPresentation.CeilingCapOpenOverhang == 0.55f &&
        CaveMaterialPresentation.CeilingCapSolidDepth == 0.30f,
@@ -146,9 +148,53 @@ Assert(spawnClearedBoulders.All(instance =>
     "Boulder placement did not preserve its configured spawn-area clearance.");
 Assert(CaveMaterialPresentation.BuildBoulderVertices(fixedBoulders).Length == fixedBoulders.Length * 6,
     "Boulder placement did not produce exactly one cached quad per decoration.");
+var fixedStalagmites = CaveMaterialPresentation.BuildStalagmitePlacements(
+    fixedBoundaries, "milestone-17-geometry-baseline", null, fixedBoulders);
+var repeatedStalagmites = CaveMaterialPresentation.BuildStalagmitePlacements(
+    fixedBoundaries, "milestone-17-geometry-baseline", null, fixedBoulders);
+var alternateStalagmites = CaveMaterialPresentation.BuildStalagmitePlacements(
+    fixedBoundaries, "milestone-20-alternate-visual-seed", null, fixedBoulders);
+var fixedStalactites = CaveMaterialPresentation.BuildStalactitePlacements(
+    fixedBoundaries, "milestone-17-geometry-baseline");
+var repeatedStalactites = CaveMaterialPresentation.BuildStalactitePlacements(
+    fixedBoundaries, "milestone-17-geometry-baseline");
+var alternateStalactites = CaveMaterialPresentation.BuildStalactitePlacements(
+    fixedBoundaries, "milestone-20-alternate-visual-seed");
+Assert(fixedStalagmites.SequenceEqual(repeatedStalagmites) &&
+       fixedStalactites.SequenceEqual(repeatedStalactites),
+    "Identical seed and geometry did not reproduce Milestone 20 formations exactly.");
+Assert(!fixedStalagmites.SequenceEqual(alternateStalagmites) &&
+       !fixedStalactites.SequenceEqual(alternateStalactites),
+    "Different visual seeds did not vary both Milestone 20 formation categories.");
+Assert(fixedStalagmites.Length is > 0 and <= CaveMaterialPresentation.StalagmiteMaximumCount &&
+       fixedStalagmites.All(instance =>
+           instance.OpenNormal.Y >= CaveMaterialPresentation.StalagmiteMinimumOpenNormalY &&
+           instance.Scale is >= CaveMaterialPresentation.StalagmiteMinimumScale and <= CaveMaterialPresentation.StalagmiteMaximumScale),
+    $"Stalagmites were absent, exceeded their cap, used an invalid surface, or exceeded their scale range (count={fixedStalagmites.Length}).");
+Assert(fixedStalactites.Length is > 0 and <= CaveMaterialPresentation.StalactiteMaximumCount &&
+       fixedStalactites.All(instance =>
+           instance.OpenNormal.Y <= CaveMaterialPresentation.StalactiteMaximumOpenNormalY &&
+           instance.Scale is >= CaveMaterialPresentation.StalactiteMinimumScale and <= CaveMaterialPresentation.StalactiteMaximumScale),
+    $"Stalactites were absent, exceeded their cap, used an invalid surface, or exceeded their scale range (count={fixedStalactites.Length}).");
+Assert(fixedStalagmites.All(instance => fixedBoulders.All(boulder =>
+        Vector2.Distance(instance.Position, boulder.Position) >= CaveMaterialPresentation.FormationOverlapClearance)),
+    "A stalagmite cluster overlapped an existing boulder placement.");
+Assert(CaveMaterialPresentation.BuildStalagmiteVertices(fixedStalagmites).Length == fixedStalagmites.Length * 6 &&
+       CaveMaterialPresentation.BuildStalactiteVertices(fixedStalactites).Length == fixedStalactites.Length * 6,
+    "A Milestone 20 formation did not produce exactly one cached render quad.");
+var invalidFormationSegments = new[]
+{
+    new CaveBoundarySegment(0, 0, new Vector2(0f, 0f), new Vector2(2f, 0f), Vector2.UnitX,
+        -Vector2.UnitY, 2f, CaveBoundaryCategory.Floor),
+    new CaveBoundarySegment(0, 1, new Vector2(3f, 0f), new Vector2(5f, 0f), Vector2.UnitX,
+        Vector2.UnitY, 2f, CaveBoundaryCategory.Ceiling),
+};
+Assert(CaveMaterialPresentation.BuildStalagmitePlacements(invalidFormationSegments, "invalid-floor").Length == 0 &&
+       CaveMaterialPresentation.BuildStalactitePlacements(invalidFormationSegments, "invalid-ceiling").Length == 0,
+    "A Milestone 20 formation accepted a clearly invalid surface orientation.");
 Assert(fixedCapGeometry.Vertices.SequenceEqual(fixedGeometryVerticesBefore) &&
        fixedCapGeometry.Triangles.SequenceEqual(fixedGeometryTrianglesBefore),
-    "Milestone 19 presentation cache construction mutated authoritative geometry.");
+    "Presentation cache construction mutated authoritative geometry.");
 var categoryCounts = Enum.GetValues<CaveBoundaryCategory>()
     .ToDictionary(category => category, category => fixedBoundaries.Count(segment => segment.Category == category));
 Assert(categoryCounts[CaveBoundaryCategory.Floor] == 67 &&
@@ -162,6 +208,8 @@ Console.WriteLine($"PASS: fixed-seed boundary counts floor={categoryCounts[CaveB
                   $"right-wall={categoryCounts[CaveBoundaryCategory.WallRight]}, slope={categoryCounts[CaveBoundaryCategory.Slope]}");
 Console.WriteLine($"PASS: deterministic visual-only boulder placement produced {fixedBoulders.Length} fixed-seed props and " +
                   $"{alternateBoulders.Length} alternate-seed props without gameplay RNG");
+Console.WriteLine($"PASS: deterministic visual-only formations produced {fixedStalagmites.Length} stalagmites and " +
+                  $"{fixedStalactites.Length} stalactites on valid surfaces without mutating geometry");
 
 Assert(BirdHellVisuals.PlayerTexture == "Sprites/Player/player_explorer_runtime_v1.png",
     "Production player texture path does not select the normalized explorer atlas.");

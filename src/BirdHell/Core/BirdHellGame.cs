@@ -34,6 +34,8 @@ public sealed class BirdHellGame : Game
     private VertexPositionTexture[] _wallEdgeVertices = [];
     private VertexPositionTexture[] _surfaceCapVertices = [];
     private VertexPositionTexture[] _boulderVertices = [];
+    private VertexPositionTexture[] _stalagmiteVertices = [];
+    private VertexPositionTexture[] _stalactiteVertices = [];
     private VertexPositionColor[] _outlineVertices = [];
     private KeyboardState _previousKeyboardState;
     private MouseState _previousMouseState;
@@ -707,6 +709,8 @@ public sealed class BirdHellGame : Game
         _wallEdgeVertices = [];
         _surfaceCapVertices = [];
         _boulderVertices = [];
+        _stalagmiteVertices = [];
+        _stalactiteVertices = [];
         _outlineVertices = [];
         _gameplayInput.ClearBufferedEdges();
         _frostedFrame?.Release();
@@ -765,6 +769,10 @@ public sealed class BirdHellGame : Game
         _surfaceCapVertices = CaveMaterialPresentation.BuildSurfaceCapVertices(boundaries);
         var boulders = CaveMaterialPresentation.BuildBoulderPlacements(boundaries, seed, playerSpawn);
         _boulderVertices = CaveMaterialPresentation.BuildBoulderVertices(boulders);
+        var stalagmites = CaveMaterialPresentation.BuildStalagmitePlacements(boundaries, seed, playerSpawn, boulders);
+        _stalagmiteVertices = CaveMaterialPresentation.BuildStalagmiteVertices(stalagmites);
+        var stalactites = CaveMaterialPresentation.BuildStalactitePlacements(boundaries, seed, playerSpawn);
+        _stalactiteVertices = CaveMaterialPresentation.BuildStalactiteVertices(stalactites);
 
         var outlineColor = new Color(255, 54, 149);
         var lineVertices = new List<VertexPositionColor>();
@@ -850,6 +858,8 @@ public sealed class BirdHellGame : Game
             DrawCavePresentationVertices(effect, _caveMaterial.WallEdgeTexture, _wallEdgeVertices);
             DrawCavePresentationVertices(effect, _caveMaterial.SurfaceCapTexture, _surfaceCapVertices);
             GraphicsDevice.SamplerStates[0] = _caveMaterial.PropSampler;
+            DrawCavePresentationVertices(effect, _caveMaterial.StalactiteTexture, _stalactiteVertices);
+            DrawCavePresentationVertices(effect, _caveMaterial.StalagmiteTexture, _stalagmiteVertices);
             DrawCavePresentationVertices(effect, _caveMaterial.BoulderTexture, _boulderVertices);
             if (captureTimings) timings.Submission = FrameStallDiagnostics.Complete(timingStart);
         }

@@ -120,6 +120,78 @@
         "worldSolidInset": 0.2
       },
       "status": "production"
+    },
+    {
+      "id": "stalagmite-cluster",
+      "sourceCrop": [
+        863,
+        515,
+        1050,
+        656
+      ],
+      "cropDescription": "authored multi-spike stone formation for sparse upward-facing floor detail",
+      "outputPath": "art/Source/Terrain/Canonical/cave_stalagmite_cluster_v1.png",
+      "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_stalagmite_cluster_v1.png",
+      "dimensions": [
+        192,
+        144
+      ],
+      "sha256": "dfb6cb0379d652bfe2f564ce6b5c03816ac2b7a0553137e57fbd43014d22dc17",
+      "alphaMode": "premultiplied alpha recovered from black matte",
+      "generationMethod": "largest connected artwork component isolation and proportional resize",
+      "resampling": "Pillow LANCZOS",
+      "intendedFilter": "linear",
+      "intendedWrapMode": {
+        "u": "clamp",
+        "v": "clamp"
+      },
+      "placementPurpose": "sparse strongly upward-facing floor formation",
+      "presentation": {
+        "worldWidth": 1.15,
+        "worldHeight": 0.85,
+        "worldSolidInset": 0.22,
+        "scaleRange": [
+          0.78,
+          1.05
+        ]
+      },
+      "status": "production"
+    },
+    {
+      "id": "stalactite-single",
+      "sourceCrop": [
+        1074,
+        452,
+        1122,
+        627
+      ],
+      "cropDescription": "authored single hanging stone for sparse downward-facing ceiling detail",
+      "outputPath": "art/Source/Terrain/Canonical/cave_stalactite_single_v1.png",
+      "runtimePath": "src/BirdHell/Content/Sprites/Terrain/cave_stalactite_single_v1.png",
+      "dimensions": [
+        56,
+        208
+      ],
+      "sha256": "f7efac7e3eea983eb5576e5f4fe989dc286177140f257473bf1afd5e2f3a0910",
+      "alphaMode": "premultiplied alpha recovered from black matte",
+      "generationMethod": "largest connected artwork component isolation and proportional resize",
+      "resampling": "Pillow LANCZOS",
+      "intendedFilter": "linear",
+      "intendedWrapMode": {
+        "u": "clamp",
+        "v": "clamp"
+      },
+      "placementPurpose": "very sparse strongly downward-facing ceiling formation",
+      "presentation": {
+        "worldWidth": 0.32,
+        "worldHeight": 0.95,
+        "worldSolidInset": 0.24,
+        "scaleRange": [
+          0.8,
+          1.08
+        ]
+      },
+      "status": "production"
     }
   ]
 }
