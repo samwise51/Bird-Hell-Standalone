@@ -221,7 +221,8 @@ public sealed class MainScreenRun
                 combatResult.PlayerDamageEvents,
                 combatResult.PlayerDied,
                 projectileResult.DamageEvents,
-                projectileResult.DeathEvents));
+                projectileResult.DeathEvents),
+            projectileResult.Hits.Concat(combatResult.Hits).ToArray());
     }
 
     public System.Numerics.Vector2 GetAimDirection() => _weaponSystem.GetAimDirection(Player);
@@ -237,7 +238,11 @@ public readonly record struct GameplayFeedbackEvents(
 
 public readonly record struct MainScreenStepResult(
     bool SecondJumpPerformed,
-    GameplayFeedbackEvents Feedback);
+    GameplayFeedbackEvents Feedback,
+    IReadOnlyList<AcceptedHit>? AcceptedHits = null)
+{
+    public IReadOnlyList<AcceptedHit> Hits => AcceptedHits ?? Array.Empty<AcceptedHit>();
+}
 
 internal struct MainScreenStepTimings
 {

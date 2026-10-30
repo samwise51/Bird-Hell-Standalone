@@ -15,16 +15,37 @@ public sealed class EnemyCombatSystem
         if (deltaTime <= 0f || !float.IsFinite(deltaTime)) throw new ArgumentOutOfRangeException(nameof(deltaTime));
         var damageEvents = 0;
         var playerDied = false;
+        List<AcceptedHit>? acceptedHits = null;
         foreach (var enemy in enemies.Where(enemy => enemy.IsAlive).OrderBy(enemy => enemy.Id))
         {
             enemy.ContactTimer += deltaTime;
             if (!player.IsAlive || enemy.ContactTimer <= ContactDelay || !Overlaps(enemy, player)) continue;
-            var damage = player.TakeDamage(ContactDamage);
-            if (damage.Applied) damageEvents++;
+            var forceDirection = HitContext.DirectionAwayFrom(
+                enemy.ColliderCenter,
+                player.ColliderCenter,
+                -enemy.Velocity);
+            var hit = new HitContext(
+                ContactDamage,
+                enemy.ColliderCenter,
+                player.ColliderCenter,
+                forceDirection,
+                HitReactionSettings.EnemyContactPlayerKnockbackSpeed,
+                HitSourceCategory.EnemyContact);
+            var damage = player.TakeHit(hit);
+            if (damage.Applied)
+            {
+                damageEvents++;
+                (acceptedHits ??= []).Add(new AcceptedHit(
+                    HitVictimCategory.Player,
+                    hit.SourcePosition,
+                    hit.ImpactPosition,
+                    hit.NormalizedForceDirection,
+                    hit.SourceCategory));
+            }
             playerDied |= damage.Killed;
             enemy.ContactTimer = 0f;
         }
-        return new EnemyCombatStepResult(damageEvents, playerDied);
+        return new EnemyCombatStepResult(damageEvents, playerDied, acceptedHits);
     }
 
     public static bool Overlaps(Enemy enemy, Player player)
@@ -42,4 +63,10 @@ public sealed class EnemyCombatSystem
     }
 }
 
-public readonly record struct EnemyCombatStepResult(int PlayerDamageEvents, bool PlayerDied);
+public readonly record struct EnemyCombatStepResult(
+    int PlayerDamageEvents,
+    bool PlayerDied,
+    IReadOnlyList<AcceptedHit>? AcceptedHits = null)
+{
+    public IReadOnlyList<AcceptedHit> Hits => AcceptedHits ?? Array.Empty<AcceptedHit>();
+}

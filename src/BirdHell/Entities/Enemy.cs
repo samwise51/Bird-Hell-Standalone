@@ -32,6 +32,7 @@ public sealed class Enemy : IDamageable
     public bool CanTakeDamage => IsAlive;
     public int FacingDirection { get; set; } = 1;
     public float DamageFlashTime { get; private set; }
+    public bool IsInHitReaction => DamageFlashTime > 0f;
     public float RepathTimer { get; set; } = EnemyNavigationSystem.RepathInterval;
     public IReadOnlyList<Vector2> Path { get; set; } = Array.Empty<Vector2>();
     public int PathIndex { get; set; }
@@ -46,12 +47,16 @@ public sealed class Enemy : IDamageable
         else if (horizontalVelocity <= -0.01f) FacingDirection = -1;
     }
 
-    public DamageResult TakeDamage(int damage)
+    public DamageResult TakeDamage(int damage) => TakeHit(new HitContext(
+        damage, ColliderCenter, ColliderCenter, Vector2.Zero, 0f, HitSourceCategory.Unspecified));
+
+    public DamageResult TakeHit(HitContext hit)
     {
-        if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));
-        if (!IsAlive || damage == 0) return default;
-        Health = Math.Max(0, Health - damage);
+        if (hit.Damage < 0) throw new ArgumentOutOfRangeException(nameof(hit));
+        if (!IsAlive || hit.Damage == 0) return default;
+        Health = Math.Max(0, Health - hit.Damage);
         DamageFlashTime = DamageFlashDuration;
+        Velocity = hit.NormalizedForceDirection * hit.KnockbackSpeed;
         var killed = Health == 0;
         if (killed)
         {

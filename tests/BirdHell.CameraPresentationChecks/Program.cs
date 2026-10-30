@@ -41,6 +41,26 @@ AssertVectorNear(stationaryTargetCamera.Position, new Vector2(0.45f, 0.75f),
     "Camera added look-ahead or another target adjustment.");
 Console.WriteLine("PASS: camera has no clamps, dead zone, or look-ahead");
 
+var impactCamera = new Camera2D();
+impactCamera.Step(new Vector2(3f, 4f));
+var impactBaseline = impactCamera.Position;
+impactCamera.TriggerImpact(Vector2.UnitX);
+Assert(impactCamera.IsShaking && impactCamera.ShakeOffset != Vector2.Zero &&
+       impactCamera.Position == impactBaseline,
+    "Impact shake did not begin as a rendering-only displacement.");
+var shakenView = impactCamera.GetView(1280, 720);
+Assert(shakenView.Center == impactBaseline + impactCamera.ShakeOffset,
+    "Camera view did not include the active impact displacement.");
+for (var index = 0; index < 5; index++) impactCamera.AdvanceImpact(0.02f);
+Assert(!impactCamera.IsShaking && impactCamera.ShakeOffset == Vector2.Zero &&
+       impactCamera.Position == impactBaseline && impactCamera.GetView(1280, 720).Center == impactBaseline,
+    "Impact shake did not expire exactly back at the logical camera baseline.");
+impactCamera.TriggerImpact(Vector2.UnitX);
+impactCamera.TriggerImpact(-Vector2.UnitX);
+Assert(impactCamera.ShakeOffset.Length() <= Camera2D.ImpactShakeAmplitude + tolerance,
+    "Repeated impacts accumulated unbounded camera displacement.");
+Console.WriteLine("PASS: accepted-impact camera shake is subtle, rendering-only, bounded, and self-clearing");
+
 var fourByThree = camera.GetView(800, 600);
 Assert(fourByThree.VerticalSpan == 10f, "4:3 view changed the vertical span.");
 AssertNear(fourByThree.HorizontalSpan, 13.333333f, "4:3 horizontal span is incorrect.");

@@ -42,15 +42,20 @@ public sealed class Player : Systems.IDamageable
     public bool IsInvincible { get; }
     public bool CanTakeDamage => IsAlive && !IsInvincible;
     public float DamageFlashTime { get; private set; }
+    public bool IsInHitReaction => DamageFlashTime > 0f;
 
     public Vector2 ColliderCenter => Position + Collider.Offset;
 
-    public Systems.DamageResult TakeDamage(int damage)
+    public Systems.DamageResult TakeDamage(int damage) => TakeHit(new Systems.HitContext(
+        damage, ColliderCenter, ColliderCenter, Vector2.Zero, 0f, Systems.HitSourceCategory.Unspecified));
+
+    public Systems.DamageResult TakeHit(Systems.HitContext hit)
     {
-        if (damage < 0) throw new ArgumentOutOfRangeException(nameof(damage));
-        if (!CanTakeDamage || damage == 0) return default;
-        Health = Math.Max(0, Health - damage);
+        if (hit.Damage < 0) throw new ArgumentOutOfRangeException(nameof(hit));
+        if (!CanTakeDamage || hit.Damage == 0) return default;
+        Health = Math.Max(0, Health - hit.Damage);
         DamageFlashTime = DamageFlashDuration;
+        Velocity = hit.NormalizedForceDirection * hit.KnockbackSpeed;
         var killed = Health == 0;
         if (killed)
         {

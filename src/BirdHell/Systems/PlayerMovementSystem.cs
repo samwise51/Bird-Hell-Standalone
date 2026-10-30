@@ -46,6 +46,17 @@ public sealed class PlayerMovementSystem
             return default;
         }
 
+        if (player.IsInHitReaction)
+        {
+            _collision.RefreshContacts(player);
+            player.Velocity += new Vector2(0f, -_settings.Gravity * deltaTime);
+            _collision.MoveAndCollide(player, player.Velocity * deltaTime);
+            var retention = MathF.Pow(HitReactionSettings.PlayerVelocityRetentionPerSecond, deltaTime);
+            player.Velocity *= retention;
+            ResetSecondJump(player);
+            return default;
+        }
+
         var performedJump = false;
         var performedJumpNumber = 0;
 

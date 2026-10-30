@@ -153,6 +153,25 @@ public sealed class EnemyNavigationSystem
                 retainedBirds[enemyIndex].EnemyId = ordered[enemyIndex].Id;
             }
             var enemy = ordered[enemyIndex];
+            if (enemy.IsInHitReaction)
+            {
+                var reactionCenter = enemy.ColliderCenter;
+                var reactionVelocity = enemy.Velocity;
+                GetMotionState(enemy.Id).IntendedMovement = reactionVelocity * deltaTime;
+                collided[enemyIndex] = _terrain.MoveCircle(
+                    ref reactionCenter, ref reactionVelocity, reactionVelocity * deltaTime, enemy.ColliderRadius);
+                enemy.Position = reactionCenter - enemy.ColliderOffset;
+                var retention = MathF.Pow(HitReactionSettings.EnemyVelocityRetentionPerSecond, deltaTime);
+                enemy.Velocity = reactionVelocity * retention;
+                enemy.UpdateFacingFromHorizontalMovement(enemy.Velocity.X);
+                if (captureTimings)
+                {
+                    timings.Birds![enemyIndex].MovementAndSteering =
+                        FrameStallDiagnostics.Complete(birdTimingStart);
+                    timings.Birds[enemyIndex].Total = timings.Birds[enemyIndex].MovementAndSteering;
+                }
+                continue;
+            }
             enemy.RepathTimer += deltaTime;
             if (enemy.RepathTimer >= RepathInterval)
             {

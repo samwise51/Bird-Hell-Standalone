@@ -8,11 +8,18 @@ public interface IDamageable
 {
     bool CanTakeDamage => true;
     DamageResult TakeDamage(int damage);
+    DamageResult TakeHit(HitContext hit) => TakeDamage(hit.Damage);
 }
 
 public readonly record struct DamageResult(bool Applied, bool Killed);
 public readonly record struct ProjectileTarget(IDamageable Damageable, Vector2 Center, float Radius);
-public readonly record struct ProjectileStepResult(int DamageEvents, int DeathEvents);
+public readonly record struct ProjectileStepResult(
+    int DamageEvents,
+    int DeathEvents,
+    IReadOnlyList<AcceptedHit>? AcceptedHits = null)
+{
+    public IReadOnlyList<AcceptedHit> Hits => AcceptedHits ?? Array.Empty<AcceptedHit>();
+}
 
 public sealed class ProjectileSystem
 {
@@ -45,6 +52,7 @@ public sealed class ProjectileSystem
         var targetArray = targets?.ToArray() ?? [];
         var damageEvents = 0;
         var deathEvents = 0;
+        List<AcceptedHit>? acceptedHits = null;
 
         for (var index = _projectiles.Count - 1; index >= 0; index--)
         {
@@ -59,8 +67,25 @@ public sealed class ProjectileSystem
 
             if (targetHit is not null && (!terrainHit || targetFraction <= terrainFraction))
             {
-                var damage = targetHit.TakeDamage(projectile.Damage);
-                if (damage.Applied) damageEvents++;
+                var impactPosition = projectile.ColliderCenter + displacement * targetFraction;
+                var hit = new HitContext(
+                    projectile.Damage,
+                    projectile.ColliderCenter,
+                    impactPosition,
+                    projectile.Direction,
+                    HitReactionSettings.ProjectileEnemyKnockbackSpeed,
+                    HitSourceCategory.Projectile);
+                var damage = targetHit.TakeHit(hit);
+                if (damage.Applied)
+                {
+                    damageEvents++;
+                    (acceptedHits ??= []).Add(new AcceptedHit(
+                        HitVictimCategory.Enemy,
+                        hit.SourcePosition,
+                        hit.ImpactPosition,
+                        hit.NormalizedForceDirection,
+                        hit.SourceCategory));
+                }
                 if (damage.Killed) deathEvents++;
                 _projectiles.RemoveAt(index);
                 continue;
@@ -76,7 +101,7 @@ public sealed class ProjectileSystem
             if (projectile.MaximumLifetime is { } lifetime && projectile.Age >= lifetime)
                 _projectiles.RemoveAt(index);
         }
-        return new ProjectileStepResult(damageEvents, deathEvents);
+        return new ProjectileStepResult(damageEvents, deathEvents, acceptedHits);
     }
 
     private static IDamageable? FindFirstTargetHit(

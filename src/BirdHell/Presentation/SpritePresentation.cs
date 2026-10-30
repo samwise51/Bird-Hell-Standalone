@@ -25,13 +25,13 @@ public sealed class SpritePresentation : IDisposable
     }
 
     /// <summary>Begins a per-asset-filtered world sprite layer using the primitive-rendering camera.</summary>
-    public void BeginWorldSprites(Camera2D camera, SpriteTextureFilter filter)
+    public void BeginWorldSprites(Camera2D camera, SpriteTextureFilter filter, bool additive = false)
     {
         ArgumentNullException.ThrowIfNull(camera);
         _activeWorldFilter = filter;
         _spriteBatch.Begin(
             SpriteSortMode.Deferred,
-            BlendState.AlphaBlend,
+            additive ? BlendState.Additive : BlendState.AlphaBlend,
             filter == SpriteTextureFilter.Point ? SamplerState.PointClamp : SamplerState.LinearClamp,
             DepthStencilState.None,
             RasterizerState.CullNone,

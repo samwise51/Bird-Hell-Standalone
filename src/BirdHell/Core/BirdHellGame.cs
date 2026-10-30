@@ -17,6 +17,8 @@ public sealed class BirdHellGame : Game
     private readonly FlightRecorderOptions _flightRecorderOptions;
     private readonly FrameStallDiagnosticOptions _stallDiagnosticOptions;
     private readonly Camera2D _camera = new();
+    private readonly HitStopController _hitStop = new();
+    private readonly ImpactParticleSystem _impactParticles = new();
     private readonly DebugPresentationSettings _debug = new();
     private readonly WorldAnimationState _animations = new();
     private readonly CloudAtmosphereState _atmosphere = new();
@@ -249,6 +251,14 @@ public sealed class BirdHellGame : Game
             var simulationTimingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             while (_simulationAccumulator >= SimulationStep)
             {
+                if (_hitStop.ConsumeStep(SimulationStep))
+                {
+                    _simulationAccumulator -= SimulationStep;
+                    fixedStepCount++;
+                    // Yield to Draw after each frozen tick so the pause is perceptible even when
+                    // this Update entered with multiple catch-up steps accumulated.
+                    break;
+                }
                 if (_stallDiagnostics is not null && fixedStepCount < _simulationStepTimings.Length)
                 {
                     ref var stepTimings = ref _simulationStepTimings[fixedStepCount];
@@ -270,6 +280,7 @@ public sealed class BirdHellGame : Game
                 }
                 _simulationAccumulator -= SimulationStep;
                 fixedStepCount++;
+                if (_hitStop.IsActive) break;
             }
             if (_stallDiagnostics is not null)
                 timings.SimulationCatchUp = FrameStallDiagnostics.Complete(simulationTimingStart);
@@ -444,9 +455,21 @@ public sealed class BirdHellGame : Game
                 {
                     timings.PlayerProjectileBatchEnd = FrameStallDiagnostics.Complete(timingStart);
                     timings.PlayerProjectileBatch = FrameStallDiagnostics.Complete(batchTimingStart);
-                    timings.GameplaySprites = FrameStallDiagnostics.Complete(spriteTimingStart);
                 }
+
+                _spritePresentation.BeginWorldSprites(
+                    _camera, BirdHellVisuals.Enemy.Frames[0].Region.Filter, additive: true);
+                DrawEnemyHitFlashes(_spritePresentation);
+                _spritePresentation.EndWorldSprites();
+                _spritePresentation.BeginWorldSprites(
+                    _camera, BirdHellVisuals.PlayerIdle.Frames[0].Region.Filter, additive: true);
+                DrawPlayerHitFlash(_spritePresentation);
+                _spritePresentation.EndWorldSprites();
+                if (_stallDiagnostics is not null)
+                    timings.GameplaySprites = FrameStallDiagnostics.Complete(spriteTimingStart);
             }
+
+            DrawImpactParticles(_effect);
 
             timingStart = _stallDiagnostics is null ? default : FrameStallDiagnostics.Capture();
             if (_stallDiagnostics is null) DrawDebugOverlays(_effect);
@@ -747,6 +770,9 @@ public sealed class BirdHellGame : Game
     {
         if (_run is null) return;
         _simulationAccumulator = 0d;
+        _hitStop.Reset();
+        _impactParticles.Reset();
+        _camera.ResetImpact();
         _gameplayInput.ClearBufferedEdges();
         _atmosphere.OnGameplayReset();
         _environmentPresentation?.SetRunLayout(_run.Seed, _run.Geometry.MinX, _run.Geometry.MaxX);
@@ -977,7 +1003,18 @@ public sealed class BirdHellGame : Game
         if (captureTimings) timings.AnimationAdvance = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
+        _impactParticles.Advance(SimulationStep);
         _camera.Step(_run.Player.Position);
+        _camera.AdvanceImpact(SimulationStep);
+        if (stepResult.Hits.Count > 0)
+        {
+            foreach (var hit in stepResult.Hits)
+            {
+                _impactParticles.Spawn(hit);
+                _camera.TriggerImpact(hit.ForceDirection);
+            }
+            _hitStop.Trigger();
+        }
         if (captureTimings) timings.CameraStep = FrameStallDiagnostics.Complete(timingStart);
 
         timingStart = captureTimings ? FrameStallDiagnostics.Capture() : default;
@@ -1197,6 +1234,60 @@ public sealed class BirdHellGame : Game
                 enemy.Position,
                 WorldAnimationState.EnemyFlip(enemy.FacingDirection),
                 HitFeedbackPresentation.TintFor(enemy.DamageFlashTime));
+    }
+
+    private void DrawEnemyHitFlashes(SpritePresentation sprites)
+    {
+        if (_run is null) return;
+        foreach (var enemy in _run.Enemies.LivingEnemies.Where(enemy => enemy.IsInHitReaction))
+            sprites.Draw(
+                _animations.EnemyFrame(_run.Seed, enemy.Id),
+                enemy.Position,
+                WorldAnimationState.EnemyFlip(enemy.FacingDirection),
+                HitFeedbackPresentation.DamageTint);
+    }
+
+    private void DrawPlayerHitFlash(SpritePresentation sprites)
+    {
+        if (_run is null || !_run.Player.IsInHitReaction ||
+            !_animations.Player.ShouldRender || _run.State == RunState.PlayerDead) return;
+        sprites.Draw(
+            _animations.Player.Playback.CurrentFrame,
+            _run.Player.Position,
+            PlayerAnimationState.FlipForFacing(_run.Player.FacingDirection),
+            HitFeedbackPresentation.DamageTint);
+    }
+
+    private void DrawImpactParticles(BasicEffect effect)
+    {
+        if (_impactParticles.Particles.Count == 0) return;
+        var vertices = new List<VertexPositionColor>(_impactParticles.Particles.Count * 6);
+        Color[] colors = [new(238, 35, 52), new(176, 18, 38), new(255, 72, 62)];
+        foreach (var particle in _impactParticles.Particles)
+        {
+            var size = 0.025f + 0.025f * particle.RemainingFraction;
+            var color = colors[particle.ColorIndex] * particle.RemainingFraction;
+            var center = new Vector3(particle.Position.X, particle.Position.Y, -0.25f);
+            var left = center + new Vector3(-size, 0f, 0f);
+            var right = center + new Vector3(size, 0f, 0f);
+            var bottom = center + new Vector3(0f, -size, 0f);
+            var top = center + new Vector3(0f, size, 0f);
+            vertices.Add(new VertexPositionColor(left, color));
+            vertices.Add(new VertexPositionColor(top, color));
+            vertices.Add(new VertexPositionColor(right, color));
+            vertices.Add(new VertexPositionColor(left, color));
+            vertices.Add(new VertexPositionColor(right, color));
+            vertices.Add(new VertexPositionColor(bottom, color));
+        }
+        effect.TextureEnabled = false;
+        effect.VertexColorEnabled = true;
+        effect.LightingEnabled = false;
+        foreach (var pass in effect.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            GraphicsDevice.DrawUserPrimitives(
+                PrimitiveType.TriangleList, vertices.ToArray(), 0, vertices.Count / 3);
+        }
     }
 
     private void DrawNavigationDebug(BasicEffect effect)
